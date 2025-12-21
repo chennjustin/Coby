@@ -2,7 +2,7 @@
 
 # LINE ID 在這：@445kyihz
 
-# 後台網址：https://line-bot-taupe-three.vercel.app
+# 後台網址：https://saving-the-finals.vercel.app/
 
 ## 專案簡介
 
@@ -250,7 +250,3 @@ ngrok http 3000
 ```
 
 將 ngrok 提供的 HTTPS URL 設定為 LINE Webhook URL。
-
-## 授權
-
-MIT License
