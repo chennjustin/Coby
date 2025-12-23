@@ -250,3 +250,9 @@ ngrok http 3000
 ```
 
 將 ngrok 提供的 HTTPS URL 設定為 LINE Webhook URL。
+
+---
+
+## 作者
+
+Created by 陳竑齊, inspired by Web Service Programming Course (wp1141)
