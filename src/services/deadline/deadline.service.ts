@@ -252,6 +252,25 @@ export class DeadlineService {
   }
 
   /**
+   * 驗證 Deadline 是否屬於指定使用者
+   */
+  async isDeadlineOwnedByUser(deadlineId: string, lineUserId: string): Promise<boolean> {
+    try {
+      await connectDB();
+      const user = await User.findOne({ lineUserId });
+      if (!user) return false;
+
+      const deadline = await Deadline.findById(deadlineId).exec();
+      if (!deadline) return false;
+
+      return deadline.userId.toString() === user._id.toString();
+    } catch (error) {
+      Logger.error("驗證 Deadline 所有權失敗", { error, deadlineId, lineUserId });
+      return false;
+    }
+  }
+
+  /**
    * 計算剩餘天數（負數表示已過期）
    */
   calculateDaysLeft(dueDate: Date): number {
