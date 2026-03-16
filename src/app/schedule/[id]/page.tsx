@@ -147,7 +147,7 @@ function DeadlineDetailContent() {
               ← 返回時程表
             </Link>
           </div>
-          <p className="text-sm text-gray-600">拯救期末大作戰</p>
+          <p className="text-sm text-gray-600">Coby</p>
         </div>
 
         {/* Deadline Detail */}

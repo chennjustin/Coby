@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { Logger } from "@/lib/utils/logger";
+import { parseToUTC } from "@/lib/utils/timezone";
 
 export const dynamic = 'force-dynamic';
 
@@ -109,17 +110,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 如果 dueDate 只有日期沒有時間，加上 23:59
-    if (typeof dueDate === "string" && !dueDate.includes("T")) {
-      dueDate = `${dueDate}T23:59`;
-    }
+    // 解析 dueDate（視為 Asia/Taipei，轉為 UTC 儲存）
+    const dueDateUtc = typeof dueDate === "string" ? parseToUTC(dueDate) : new Date(dueDate);
 
     // 建立 deadline
     const deadline = await deadlineService.createDeadline({
       userId: userInfo.lineUserId,
       title,
       type,
-      dueDate: new Date(dueDate),
+      dueDate: dueDateUtc,
       estimatedHours: estimatedHours || 2,
     });
 

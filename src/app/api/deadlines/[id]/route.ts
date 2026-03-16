@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { Logger } from "@/lib/utils/logger";
+import { parseToUTC } from "@/lib/utils/timezone";
 
 export const dynamic = 'force-dynamic';
 
@@ -92,7 +93,7 @@ export async function PATCH(
       }
       updates.type = type;
     }
-    if (dueDate !== undefined) updates.dueDate = new Date(dueDate);
+    if (dueDate !== undefined) updates.dueDate = typeof dueDate === "string" ? parseToUTC(dueDate) : new Date(dueDate);
     if (estimatedHours !== undefined) updates.estimatedHours = estimatedHours;
     if (status !== undefined) {
       const validStatuses = ["pending", "done"];

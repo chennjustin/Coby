@@ -7,9 +7,10 @@ export interface IDeadline extends Document {
   userId: mongoose.Types.ObjectId;
   title: string;
   type: DeadlineType;
-  dueDate: Date;
+  dueDate: Date; // 以 UTC 儲存，顯示時依 timeZone 轉換
   estimatedHours: number;
   status: DeadlineStatus;
+  timeZone?: string; // 預設 Asia/Taipei，用於顯示轉換
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,6 +46,10 @@ const DeadlineSchema: Schema = new Schema(
       enum: ["pending", "done"],
       default: "pending",
       index: true,
+    },
+    timeZone: {
+      type: String,
+      default: "Asia/Taipei",
     },
   },
   {

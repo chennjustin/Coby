@@ -1,6 +1,7 @@
 import { BotContext } from "@/types/bot";
 import { LineMessagingClient } from "@/lib/line/client";
 import { Logger } from "@/lib/utils/logger";
+import { BOT_NAME } from "@/lib/constants";
 
 const lineClient = new LineMessagingClient();
 
@@ -18,9 +19,9 @@ export async function handleFollow(context: BotContext) {
 
     // 發送歡迎訊息（帶 Quick Reply）
     const welcomeMessage = 
-`🎉 歡迎使用「拯救期末大作戰」！
+`🎉 歡迎使用「${BOT_NAME}」！
 
-這是一個幫助大學生進行時間管理的 LineBot，幫你順利度過每一個期中期末！
+我是你的時間管理小幫手，幫你順利度過每一個期中期末！
 
 📌 主要功能介紹
 
@@ -63,7 +64,7 @@ export async function handleFollow(context: BotContext) {
     const replyToken = context.event.replyToken;
     if (replyToken) {
       try {
-        await lineClient.sendQuickReply(replyToken, "歡迎使用拯救期末大作戰！", [
+        await lineClient.sendQuickReply(replyToken, `歡迎使用 ${BOT_NAME}！`, [
           { label: "🍀 每日簽到", text: "簽到" },
           { label: "🔮 抽!!!", text: "今日占卜" },
           { label: "📅 查看時程", text: "查看時程" },

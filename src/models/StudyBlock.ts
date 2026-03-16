@@ -5,14 +5,15 @@ export type StudyBlockStatus = "pending" | "done";
 export interface IStudyBlock extends Document {
   userId: mongoose.Types.ObjectId;
   deadlineId: mongoose.Types.ObjectId;
-  date: Date; // Block 日期（僅日期部分）
-  startTime: Date; // 開始時間（包含日期和時間）
-  endTime: Date; // 結束時間
+  date: Date; // Block 日期（僅日期部分，以 UTC 儲存）
+  startTime: Date; // 開始時間（以 UTC 儲存）
+  endTime: Date; // 結束時間（以 UTC 儲存）
   duration: number; // 持續時間（小時）
   title: string; // 顯示標題，例如 "OS HW4（進度 1/3）"
   blockIndex: number; // 第幾個 block，從 1 開始
   totalBlocks: number; // 總共幾個 blocks
   status: StudyBlockStatus;
+  timeZone?: string; // 預設 Asia/Taipei，用於顯示轉換
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +67,10 @@ const StudyBlockSchema: Schema = new Schema(
       enum: ["pending", "done"],
       default: "pending",
       index: true,
+    },
+    timeZone: {
+      type: String,
+      default: "Asia/Taipei",
     },
   },
   {

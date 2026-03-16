@@ -2,8 +2,9 @@ import { LLMClient, LLMMessage } from "@/lib/llm/client";
 import { OpenAIClient } from "@/lib/llm/openai";
 import { handleLLMError, getFallbackResponse } from "@/lib/llm/fallback";
 import { Logger } from "@/lib/utils/logger";
+import { BOT_NAME } from "@/lib/constants";
 
-const SYSTEM_PROMPT = `你是「拯救期末大作戰」LINE Bot，專門幫助大學生管理期末和作業。
+const SYSTEM_PROMPT = `你是「${BOT_NAME}」LINE Bot，專門幫助大學生管理期末和作業。
 
 你的主要功能包括：
 1. 🍀 每日簽到 - 輸入「簽到」或「每日簽到」

@@ -1,5 +1,7 @@
 import { IDeadline } from "@/models/Deadline";
 import { DeadlineService } from "@/services/deadline/deadline.service";
+import { BOT_NAME } from "@/lib/constants";
+import { getTypeEmoji, getTypeText, getDaysLeftText, getDaysLeft, formatDeadlineDueDate } from "@/lib/formatters/deadline-formatter";
 
 /**
  * 建構「查看時程」Flex Message（包含 token URL 按鈕）
@@ -91,7 +93,7 @@ export function buildMainMenuFlexMessage() {
         contents: [
           {
             type: "text",
-            text: "拯救期末大作戰",
+            text: BOT_NAME,
             weight: "bold",
             size: "xl",
             color: "#1DB446",
@@ -181,34 +183,11 @@ export function buildDeadlineDetailFlexMessage(deadline: IDeadline): {
   altText: string;
   contents: any;
 } {
-  const deadlineService = new DeadlineService();
-  const daysLeft = deadlineService.calculateDaysLeft(deadline.dueDate);
-  const daysText =
-    daysLeft < 0
-      ? `已過期 ${Math.abs(daysLeft)} 天`
-      : daysLeft === 0
-      ? "今天截止"
-      : `剩餘 ${daysLeft} 天`;
-
-  const typeEmoji = {
-    exam: "📝",
-    assignment: "📄",
-    project: "📦",
-    other: "📌",
-  }[deadline.type];
-
-  const typeText = {
-    exam: "考試",
-    assignment: "作業",
-    project: "專題",
-    other: "其他",
-  }[deadline.type];
-
-  const dateStr = deadline.dueDate.toLocaleDateString("zh-TW", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const daysLeft = getDaysLeft(deadline.dueDate);
+  const daysText = getDaysLeftText(deadline.dueDate);
+  const typeEmoji = getTypeEmoji(deadline.type);
+  const typeText = getTypeText(deadline.type);
+  const dateStr = formatDeadlineDueDate(deadline.dueDate);
 
   return {
     type: "flex",

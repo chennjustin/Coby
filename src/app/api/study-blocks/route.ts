@@ -3,6 +3,7 @@ import { StudyBlockService } from "@/services/study-block/study-block.service";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { Logger } from "@/lib/utils/logger";
+import { parseToUTC } from "@/lib/utils/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -126,14 +127,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const start = new Date(startTime);
+    const start = typeof startTime === "string" ? parseToUTC(startTime) : new Date(startTime);
     const end = new Date(start.getTime() + duration * 60 * 60 * 1000);
 
-    // 建立 block
+    // 建立 block（date、startTime、endTime 以 UTC 儲存）
     const block = await studyBlockService.createStudyBlock({
       userId: userInfo.lineUserId,
       deadlineId,
-      date: new Date(date),
+      date: typeof date === "string" ? parseToUTC(date) : new Date(date),
       startTime: start,
       endTime: end,
       duration,

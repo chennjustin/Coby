@@ -4,6 +4,7 @@ import { useState, Suspense, useMemo, useCallback, useEffect, useRef } from "rea
 import { useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
 import { useDeadlines, useStudyBlocks, Deadline, StudyBlock } from "@/hooks/useScheduleData";
+import { parseToUTC } from "@/lib/utils/timezone";
 
 // 時間軸配置
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 8); // 08:00 - 24:00
@@ -591,7 +592,7 @@ function ScheduleContent() {
           {/* Header */}
           <div className="mb-4 sm:mb-8 text-center">
             <h1 className="text-2xl sm:text-3xl font-light text-gray-800 mb-1">我的時程表</h1>
-            <p className="text-xs sm:text-sm text-gray-500">拯救期末大作戰</p>
+            <p className="text-xs sm:text-sm text-gray-500">Coby</p>
           </div>
 
           {/* 手機版：單日視圖 */}
@@ -1128,15 +1129,15 @@ function DetailPanel({
         body = {
           title: formData.title,
           type: formData.type,
-          dueDate: new Date(`${formData.dueDate}T${formData.dueTime}:00`).toISOString(),
+          dueDate: parseToUTC(formData.dueDate, formData.dueTime).toISOString(),
           estimatedHours: formData.estimatedHours,
         };
       } else {
         const block = item.data as StudyBlock;
         url = `${window.location.origin}/api/study-blocks/${block.id}?token=${encodeURIComponent(token)}`;
         body = {
-          startTime: new Date(formData.startTime).toISOString(),
-          endTime: new Date(formData.endTime).toISOString(),
+          startTime: parseToUTC(formData.startTime).toISOString(),
+          endTime: parseToUTC(formData.endTime).toISOString(),
           duration: formData.duration,
           title: formData.title,
         };
@@ -1444,7 +1445,7 @@ function AddDeadlineModal({
 
     try {
       const url = `${window.location.origin}/api/deadlines?token=${encodeURIComponent(token)}`;
-      const dueDateTime = new Date(`${formData.dueDate}T${formData.dueTime}:00`);
+      const dueDateTime = parseToUTC(formData.dueDate, formData.dueTime);
 
       const response = await fetch(url, {
         method: "POST",

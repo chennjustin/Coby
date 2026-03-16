@@ -1,3 +1,6 @@
+// Bot 名稱（統一管理，方便未來調整）
+export const BOT_NAME = "Coby";
+
 // LLM 配置
 export const MAX_CONTEXT_MESSAGES = 10;
 

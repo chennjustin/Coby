@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { StudyBlockService } from "@/services/study-block/study-block.service";
+import { parseToUTC } from "@/lib/utils/timezone";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { Logger } from "@/lib/utils/logger";
 import StudyBlock from "@/models/StudyBlock";
@@ -81,15 +82,15 @@ export async function PATCH(
 
     // 構建更新對象
     const updates: any = {};
-    if (date !== undefined) updates.date = new Date(date);
-    if (startTime !== undefined) updates.startTime = new Date(startTime);
-    if (endTime !== undefined) {
-      updates.endTime = new Date(endTime);
-    } else if (startTime !== undefined && duration !== undefined) {
-      // 如果只更新了 startTime 和 duration，自動計算 endTime
-      const start = new Date(startTime);
-      updates.endTime = new Date(start.getTime() + duration * 60 * 60 * 1000);
+    if (date !== undefined) updates.date = typeof date === "string" ? parseToUTC(date) : new Date(date);
+    if (startTime !== undefined) {
+      const start = typeof startTime === "string" ? parseToUTC(startTime) : new Date(startTime);
+      updates.startTime = start;
+      if (endTime === undefined && duration !== undefined) {
+        updates.endTime = new Date(start.getTime() + duration * 60 * 60 * 1000);
+      }
     }
+    if (endTime !== undefined) updates.endTime = typeof endTime === "string" ? parseToUTC(endTime) : new Date(endTime);
     if (duration !== undefined) updates.duration = duration;
     if (title !== undefined) updates.title = title;
     if (status !== undefined) {
