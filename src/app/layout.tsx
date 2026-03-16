@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "拯救期末大作戰",
+  title: "Coby",
   description: "LINE Bot 時程管理系統",
 };
 

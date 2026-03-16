@@ -9,7 +9,7 @@ export const RICH_MENU_CONFIG = {
     height: 1686,
   },
   selected: false,
-  name: "拯救期末大作戰主選單",
+  name: "Coby 主選單",
   chatBarText: "選單",
   areas: [
     // 左上：簽到

@@ -591,7 +591,7 @@ function ScheduleContent() {
           {/* Header */}
           <div className="mb-4 sm:mb-8 text-center">
             <h1 className="text-2xl sm:text-3xl font-light text-gray-800 mb-1">我的時程表</h1>
-            <p className="text-xs sm:text-sm text-gray-500">拯救期末大作戰</p>
+            <p className="text-xs sm:text-sm text-gray-500">Coby</p>
           </div>
 
           {/* 手機版：單日視圖 */}

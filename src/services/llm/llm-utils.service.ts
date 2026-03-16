@@ -1,6 +1,6 @@
 import { OpenAIClient } from "@/lib/llm/openai";
 import { Logger } from "@/lib/utils/logger";
-import { getTodayChinese, getCurrentDateTimeChinese } from "@/lib/utils/date";
+import { getTodayChinese, getCurrentDateTimeChinese, getTaiwanNow } from "@/lib/utils/date";
 import { APP_CONFIG } from "@/lib/config/app.config";
 
 export class LLMUtilsService {
@@ -111,7 +111,7 @@ export class LLMUtilsService {
 2. dueDate 解析規則（非常重要）：
    - 格式：YYYY-MM-DDTHH:mm（ISO 8601格式，例如：2025-12-02T18:00）
    - 當前日期時間：${currentDateTime}（${APP_CONFIG.CURRENT_YEAR}年）
-   - 如果提到「今天」「今日」→ 使用今天的日期，時間根據上下文判斷（例如「今天下午6點」→ ${APP_CONFIG.CURRENT_YEAR}-${new Date().getMonth() + 1}-${new Date().getDate()}T18:00）
+   - 如果提到「今天」「今日」→ 使用今天的日期，時間根據上下文判斷（例如「今天下午6點」→ ${getTaiwanNow().format("YYYY-MM-DD")}T18:00）
    - 如果提到「明天」「明日」→ 使用明天的日期，時間根據上下文判斷
    - 如果提到「下週X」「下星期X」→ 計算下週對應的日期，時間根據上下文判斷
    - 如果提到「X月X日」→ 轉換為 ${APP_CONFIG.CURRENT_YEAR} 年對應日期，時間根據上下文判斷

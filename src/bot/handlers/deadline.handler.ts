@@ -13,6 +13,7 @@ import connectDB from "@/lib/db/mongoose";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
+import { createTaiwanDate, taiwanNow } from "@/lib/utils/timezone";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -24,20 +25,8 @@ const lineClient = new LineMessagingClient();
 const userTokenService = new UserTokenService();
 const studyBlockService = new StudyBlockService();
 
-// Quick Reply 按鈕配置
-const QUICK_REPLY_ITEMS = [
-  { label: "🍀 每日簽到", text: "簽到" },
-  { label: "🔮 抽!!!", text: "今日占卜" },
-  { label: "📅 查看時程", text: "查看時程" },
-  { label: "📝 新增死線", text: "新增 Deadline" },
-];
-
-/**
- * 發送帶有 Quick Reply 的文字訊息
- */
-async function sendTextMessageWithQuickReply(replyToken: string, text: string) {
-  await lineClient.sendQuickReply(replyToken, text, QUICK_REPLY_ITEMS);
-}
+import { sendQuickReplyWithMenu } from "@/bot/constants";
+import { getAppUrl } from "@/lib/utils/app-url";
 
 /**
  * 發送排程成功訊息
@@ -51,24 +40,7 @@ async function sendScheduleSuccessMessage(
     // 取得或創建 viewToken
     const viewToken = await userTokenService.getOrCreateViewToken(userId);
 
-    // 取得應用程式 URL
-    let appUrl = process.env.NEXT_PUBLIC_APP_URL;
-    if (!appUrl) {
-      if (process.env.VERCEL_URL) {
-        const vercelUrl = process.env.VERCEL_URL;
-        if (vercelUrl.startsWith("http://") || vercelUrl.startsWith("https://")) {
-          appUrl = vercelUrl;
-        } else {
-          appUrl = `https://${vercelUrl}`;
-        }
-      } else {
-        appUrl = "http://localhost:3000";
-      }
-    }
-    appUrl = appUrl.replace(/\/$/, "");
-    if (!appUrl.startsWith("http://") && !appUrl.startsWith("https://")) {
-      appUrl = `https://${appUrl}`;
-    }
+    const appUrl = getAppUrl();
 
     const scheduleUrl = `${appUrl}/schedule?token=${viewToken}`;
 
@@ -195,7 +167,7 @@ async function sendScheduleSuccessMessage(
       }
     }
 
-    await sendTextMessageWithQuickReply(replyToken, message);
+    await sendQuickReplyWithMenu(replyToken, message);
 
     // 如果有排程，發送時程表連結按鈕
     if (validBlocks.length > 0) {
@@ -220,7 +192,7 @@ async function sendScheduleSuccessMessage(
   } catch (error) {
     Logger.error("發送排程成功訊息失敗", { error, userId, deadlineId: deadline._id });
     // 如果發送失敗，至少發送基本成功訊息
-    await sendTextMessageWithQuickReply(
+    await sendQuickReplyWithMenu(
       replyToken,
       `✅ 已成功建立 Deadline：${deadline.title}`
     );
@@ -258,7 +230,7 @@ export async function handleAddDeadlineStepByStep(
       const replyToken = context.event.replyToken;
       if (replyToken) {
         const cancelMessage = "已取消輸入。";
-        await sendTextMessageWithQuickReply(replyToken, cancelMessage);
+        await sendQuickReplyWithMenu(replyToken, cancelMessage);
         // 記錄 Bot 回應到歷史
         await userStateService.addToConversationHistory(userId, "assistant", cancelMessage);
       }
@@ -374,12 +346,10 @@ export async function handleAddDeadlineStepByStep(
         if (dateTimeMatch) {
           const month = parseInt(dateTimeMatch[1]);
           const day = parseInt(dateTimeMatch[2]);
-          // 使用台灣時區的當前年份
-          const { getTaiwanNow } = await import("@/lib/utils/date");
-          const year = getTaiwanNow().year();
+          const year = taiwanNow().year();
           const hour = dateTimeMatch[3] ? parseInt(dateTimeMatch[3]) : 23;
           const minute = dateTimeMatch[4] ? parseInt(dateTimeMatch[4]) : 59;
-          dueDate = new Date(year, month - 1, day, hour, minute);
+          dueDate = createTaiwanDate(year, month, day, hour, minute);
         } else {
           // 使用 LLM 解析（支援完整日期時間）
           const parsedDateTime = await llmUtilsService.parseDateFromText(userInput);
@@ -391,7 +361,7 @@ export async function handleAddDeadlineStepByStep(
 
         if (!dueDate || isNaN(dueDate.getTime())) {
           const errorText = "無法解析日期時間，請重新輸入（格式：YYYY/MM/DD HH:mm 或 12/20 18:00）：";
-          await sendTextMessageWithQuickReply(replyToken, errorText);
+          await sendQuickReplyWithMenu(replyToken, errorText);
           // 記錄 Bot 回應到歷史
           await userStateService.addToConversationHistory(userId, "assistant", errorText);
           return;
@@ -623,7 +593,7 @@ export async function handleAddDeadlineNLP(
       await userStateService.clearState(userId);
       if (replyToken) {
         const cancelMessage = "已取消輸入。";
-        await sendTextMessageWithQuickReply(replyToken, cancelMessage);
+        await sendQuickReplyWithMenu(replyToken, cancelMessage);
         await userStateService.addToConversationHistory(userId, "assistant", cancelMessage);
       }
       return;
@@ -792,7 +762,7 @@ export async function handleConfirmNLPDeadline(
 
     if (isNaN(dueDate.getTime())) {
       if (replyToken) {
-        await sendTextMessageWithQuickReply(replyToken, "日期時間格式錯誤，請重新輸入。");
+        await sendQuickReplyWithMenu(replyToken, "日期時間格式錯誤，請重新輸入。");
       }
       return;
     }
@@ -877,7 +847,7 @@ export async function handleEditDeadline(
       const parsedDateTime = await llmUtilsService.parseDateFromText(newValue);
       if (!parsedDateTime) {
         if (replyToken) {
-          await sendTextMessageWithQuickReply(replyToken, "無法解析日期時間，請重新輸入。");
+          await sendQuickReplyWithMenu(replyToken, "無法解析日期時間，請重新輸入。");
         }
         return;
       }
@@ -888,7 +858,7 @@ export async function handleEditDeadline(
       const dateStr = dueDateObj.toLocaleDateString("zh-TW");
       const timeStr = dueDateObj.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
       if (replyToken) {
-        await sendTextMessageWithQuickReply(replyToken, `✅ 已更新截止日期時間：${dateStr} ${timeStr}`);
+        await sendQuickReplyWithMenu(replyToken, `✅ 已更新截止日期時間：${dateStr} ${timeStr}`);
       }
     } else if (field === "時間" && newValue) {
       const hours = parseInt(newValue) || 2;
@@ -912,7 +882,7 @@ export async function handleEditDeadline(
       });
       const replyToken = context.event.replyToken;
       if (replyToken) {
-        await sendTextMessageWithQuickReply(replyToken, `請輸入新的${field}：`);
+        await sendQuickReplyWithMenu(replyToken, `請輸入新的${field}：`);
       }
     }
   } catch (error) {

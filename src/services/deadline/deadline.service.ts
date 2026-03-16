@@ -13,6 +13,7 @@ import mongoose from "mongoose";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
+import { toTaiwanDayjs, taiwanNow } from "@/lib/utils/timezone";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -251,15 +252,45 @@ export class DeadlineService {
   }
 
   /**
+   * 根據多個 ID 批次取得 Deadline
+   */
+  async getDeadlinesByIds(ids: string[]): Promise<IDeadline[]> {
+    try {
+      await connectDB();
+      const deadlines = await Deadline.find({ _id: { $in: ids } }).exec();
+      return deadlines;
+    } catch (error) {
+      Logger.error("批次取得 Deadline 失敗", { error, ids });
+      return [];
+    }
+  }
+
+  /**
+   * 驗證 Deadline 是否屬於指定使用者
+   */
+  async isDeadlineOwnedByUser(deadlineId: string, lineUserId: string): Promise<boolean> {
+    try {
+      await connectDB();
+      const user = await User.findOne({ lineUserId });
+      if (!user) return false;
+
+      const deadline = await Deadline.findById(deadlineId).exec();
+      if (!deadline) return false;
+
+      return deadline.userId.toString() === user._id.toString();
+    } catch (error) {
+      Logger.error("驗證 Deadline 所有權失敗", { error, deadlineId, lineUserId });
+      return false;
+    }
+  }
+
+  /**
    * 計算剩餘天數（負數表示已過期）
    */
   calculateDaysLeft(dueDate: Date): number {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const due = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-    const diffTime = due.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    const today = taiwanNow().startOf("day");
+    const due = toTaiwanDayjs(dueDate).startOf("day");
+    return due.diff(today, "day");
   }
 
   /**

@@ -91,7 +91,7 @@ export function buildMainMenuFlexMessage() {
         contents: [
           {
             type: "text",
-            text: "拯救期末大作戰",
+            text: "Coby",
             weight: "bold",
             size: "xl",
             color: "#1DB446",

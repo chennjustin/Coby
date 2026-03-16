@@ -2,11 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { Logger } from "@/lib/utils/logger";
+import { formatUtcToTaipei, parseTaipeiInputToUtc } from "@/lib/utils/date";
 
 export const dynamic = 'force-dynamic';
 
 const deadlineService = new DeadlineService();
 const userTokenService = new UserTokenService();
+
+function formatDeadline(deadline: {
+  _id: { toString(): string };
+  title: string;
+  type: string;
+  dueDate: Date | string;
+  estimatedHours: number;
+  status: string;
+}) {
+  const dueDateUtc = deadline.dueDate instanceof Date ? deadline.dueDate : new Date(deadline.dueDate);
+  return {
+    id: deadline._id.toString(),
+    title: deadline.title,
+    type: deadline.type,
+    dueDate: dueDateUtc.toISOString(),
+    dueDateTaipei: formatUtcToTaipei(dueDateUtc, "YYYY-MM-DD HH:mm"),
+    estimatedHours: deadline.estimatedHours,
+    status: deadline.status,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,18 +63,7 @@ export async function GET(request: NextRequest) {
     });
 
     // 將 Date 轉換為字符串
-    const formattedDeadlines = deadlines.map((deadline: any) => ({
-      id: deadline._id.toString(),
-      title: deadline.title,
-      type: deadline.type,
-      dueDate: deadline.dueDate instanceof Date 
-        ? deadline.dueDate.toISOString() 
-        : typeof deadline.dueDate === 'string' 
-        ? deadline.dueDate 
-        : new Date(deadline.dueDate).toISOString(),
-      estimatedHours: deadline.estimatedHours,
-      status: deadline.status,
-    }));
+    const formattedDeadlines = deadlines.map(formatDeadline);
 
     return NextResponse.json({
       success: true,
@@ -90,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    let { title, type, dueDate, estimatedHours } = body;
+    const { title, type, dueDate, estimatedHours } = body;
 
     // 驗證必填欄位
     if (!title || !type || !dueDate) {
@@ -109,35 +119,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 如果 dueDate 只有日期沒有時間，加上 23:59
-    if (typeof dueDate === "string" && !dueDate.includes("T")) {
-      dueDate = `${dueDate}T23:59`;
-    }
-
     // 建立 deadline
     const deadline = await deadlineService.createDeadline({
       userId: userInfo.lineUserId,
       title,
       type,
-      dueDate: new Date(dueDate),
+      dueDate: parseTaipeiInputToUtc(dueDate),
       estimatedHours: estimatedHours || 2,
     });
 
-    // 格式化回應
-    const formattedDeadline = {
-      id: deadline._id.toString(),
-      title: deadline.title,
-      type: deadline.type,
-      dueDate: deadline.dueDate instanceof Date
-        ? deadline.dueDate.toISOString()
-        : new Date(deadline.dueDate).toISOString(),
-      estimatedHours: deadline.estimatedHours,
-      status: deadline.status,
-    };
-
     return NextResponse.json({
       success: true,
-      data: formattedDeadline,
+      data: formatDeadline(deadline as any),
     });
   } catch (error) {
     Logger.error("Create deadline error", { error });

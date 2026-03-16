@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { Logger } from "@/lib/utils/logger";
+import { taiwanNow, toTaiwanDayjs } from "@/lib/utils/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -71,12 +72,9 @@ export async function GET(
         ? deadline.dueDate
         : new Date(deadline.dueDate);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0);
-    const diffTime = due.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const today = taiwanNow().startOf("day");
+    const due = toTaiwanDayjs(dueDate).startOf("day");
+    const diffDays = due.diff(today, "day");
 
     const typeMap: Record<string, string> = {
       exam: "考試",
