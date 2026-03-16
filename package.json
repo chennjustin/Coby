@@ -1,14 +1,12 @@
 {
-  "name": "line-bot-hw6",
+  "name": "coby-line-bot",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "lint": "next lint"
   },
   "dependencies": {
     "@types/react-beautiful-dnd": "^13.1.8",
@@ -31,7 +29,6 @@
     "postcss": "^8.4.0",
     "prettier": "^3.3.0",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.5.0",
-    "vitest": "^4.1.0"
+    "typescript": "^5.5.0"
   }
 }

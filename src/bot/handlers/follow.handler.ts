@@ -17,10 +17,10 @@ export async function handleFollow(context: BotContext) {
     }
 
     // 發送歡迎訊息（帶 Quick Reply）
-    const welcomeMessage =
+    const welcomeMessage = 
 `🎉 歡迎使用「Coby」！
 
-我是 Coby，你的 LINE 學習時程助手，幫你更穩定地管理作業、專題與考試！
+我是 Coby，一個幫助大學生進行時間管理的 LineBot，幫你順利度過每一個期中期末！
 
 📌 主要功能介紹
 

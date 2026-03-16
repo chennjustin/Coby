@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { Logger } from "@/lib/utils/logger";
-import { formatUtcToTaipei } from "@/lib/utils/date";
+import { taiwanNow, toTaiwanDayjs } from "@/lib/utils/timezone";
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +43,9 @@ export async function GET(request: NextRequest) {
         ? deadline.dueDate
         : new Date(deadline.dueDate);
       
-      const diffDays = deadlineService.calculateDaysLeft(dueDate);
+      const today = taiwanNow().startOf("day");
+      const due = toTaiwanDayjs(dueDate).startOf("day");
+      const diffDays = due.diff(today, "day");
 
       const typeMap: Record<string, string> = {
         exam: "考試",
@@ -58,7 +60,11 @@ export async function GET(request: NextRequest) {
         type: deadline.type,
         typeName: typeMap[deadline.type] || "其他",
         dueDate: dueDate.toISOString(),
-        dueDateFormatted: formatUtcToTaipei(dueDate, "YYYY 年 M 月 D 日 HH:mm"),
+        dueDateFormatted: dueDate.toLocaleDateString("zh-TW", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
         estimatedHours: deadline.estimatedHours,
         daysLeft: diffDays,
         isOverdue: diffDays < 0,

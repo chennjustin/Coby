@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Coby",
-  description: "Coby LINE Bot 時程管理系統",
+  description: "LINE Bot 時程管理系統",
 };
 
 export default function RootLayout({

@@ -1,52 +1,25 @@
 import { LLMClient, LLMMessage } from "@/lib/llm/client";
 import { OpenAIClient } from "@/lib/llm/openai";
-import { handleLLMError, getFallbackResponse } from "@/lib/llm/fallback";
+import { handleLLMError } from "@/lib/llm/fallback";
 import { Logger } from "@/lib/utils/logger";
+import fs from "fs";
 import path from "path";
-import { readFile } from "fs/promises";
 
-const SYSTEM_PROMPT = `你是「Coby」LINE Bot，專門幫助大學生管理期末和作業。
-
-你的主要功能包括：
-1. 🍀 每日簽到 - 輸入「簽到」或「每日簽到」
-2. 🔮 今日占卜 - 輸入「今日占卜」或「抽!!!」
-3. 📅 查看時程 - 輸入「查看時程」或「時程」
-4. 📝 新增 Deadline - 輸入「新增 Deadline」
-
-**重要：當使用者詢問關於學習時間分配、讀書計畫、已安排的時程等問題時，你必須根據提供的「用戶資料」來回答，而不是給出通用的建議。**
-
-例如：
-- 如果用戶問「你這8小時幫我分配到那些時間」或「網服作業的時間有8小時，你分配在哪裡」
-- 你應該查看「用戶的 Study Blocks」資料，找出該作業的所有學習時間段，並告訴用戶具體的日期和時間
-
-當使用者詢問功能或選單時，請引導他們使用「主選單」指令。
-
-你的特點：
-1. 友善、耐心、樂於助人
-2. 回答簡潔明瞭，適合在 Line 訊息中使用
-3. 使用繁體中文回應
-4. 風格幽默但溫暖，像一個關心學弟妹的學長
-5. **當用戶問到已安排的學習時間時，必須根據實際資料回答，不要給出通用建議**
-
-請根據使用者的問題和提供的資料提供有用的回應。`;
-
-const PERSONA_PATH = path.join(process.cwd(), "docs", "persona", "coby-persona.md");
-let personaCache: string | null = null;
-
-async function getPersonaPrompt(): Promise<string> {
-  if (personaCache) {
-    return personaCache;
-  }
-
+function loadPersonality(): string {
   try {
-    const content = await readFile(PERSONA_PATH, "utf-8");
-    personaCache = content.trim();
-    return personaCache;
-  } catch (error) {
-    Logger.warn("讀取 Coby persona 失敗，改用內建 prompt", { error });
+    const personalityPath = path.join(process.cwd(), "src", "bot", "personality.md");
+    return fs.readFileSync(personalityPath, "utf-8");
+  } catch {
+    Logger.warn("無法讀取 personality.md，使用內建預設");
     return "";
   }
 }
+
+const personalityContent = loadPersonality();
+
+const SYSTEM_PROMPT = personalityContent
+  ? `${personalityContent}\n\n請根據使用者的問題和提供的資料提供有用的回應。`
+  : `你是「Coby」LINE Bot，專門幫助大學生管理期末和作業。風格幽默但溫暖，像一個關心學弟妹的學長。使用繁體中文回應。請根據使用者的問題和提供的資料提供有用的回應。`;
 
 export class ChatService {
   private llmClient: LLMClient;
@@ -69,12 +42,8 @@ export class ChatService {
     }
   ): Promise<string> {
     try {
-      // 構建系統提示，包含 persona 與用戶資料
+      // 構建系統提示，包含用戶資料
       let systemContent = SYSTEM_PROMPT;
-      const personaPrompt = await getPersonaPrompt();
-      if (personaPrompt) {
-        systemContent += `\n\n以下是 Coby 的人格設定，請一併遵循：\n${personaPrompt}`;
-      }
       
       if (userData) {
         systemContent += "\n\n**用戶資料：**\n";

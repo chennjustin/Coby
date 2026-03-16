@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { Logger } from "@/lib/utils/logger";
-import { formatUtcToTaipei } from "@/lib/utils/date";
+import { taiwanNow, toTaiwanDayjs } from "@/lib/utils/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -53,8 +53,13 @@ export async function GET(
     }
 
     // 驗證 deadline 屬於該用戶
-    const hasPermission = await deadlineService.isDeadlineOwnedByUser(deadlineId, userInfo.lineUserId);
-    if (!hasPermission) {
+    const userDeadlines = await deadlineService.getDeadlinesByUser(
+      userInfo.lineUserId,
+      "pending"
+    );
+    const userDeadlineIds = userDeadlines.map((d) => d._id.toString());
+    
+    if (!userDeadlineIds.includes(deadlineId)) {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
         { status: 403 }
@@ -67,7 +72,9 @@ export async function GET(
         ? deadline.dueDate
         : new Date(deadline.dueDate);
 
-    const diffDays = deadlineService.calculateDaysLeft(dueDate);
+    const today = taiwanNow().startOf("day");
+    const due = toTaiwanDayjs(dueDate).startOf("day");
+    const diffDays = due.diff(today, "day");
 
     const typeMap: Record<string, string> = {
       exam: "考試",
@@ -82,7 +89,11 @@ export async function GET(
       type: deadline.type,
       typeName: typeMap[deadline.type] || "其他",
       dueDate: dueDate.toISOString(),
-      dueDateFormatted: formatUtcToTaipei(dueDate, "YYYY 年 M 月 D 日 HH:mm"),
+      dueDateFormatted: dueDate.toLocaleDateString("zh-TW", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
       estimatedHours: deadline.estimatedHours,
       daysLeft: diffDays,
       isOverdue: diffDays < 0,

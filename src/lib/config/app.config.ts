@@ -5,12 +5,11 @@
 
 export const APP_CONFIG = {
   /**
-   * 當前年份
-   * 用於日期解析和 LLM prompt
+   * 當前年份（動態取得台灣時區年份）
    */
   get CURRENT_YEAR(): number {
-    const { getTaiwanNow } = require("@/lib/utils/date");
-    return getTaiwanNow().year();
+    const { taiwanYear } = require("@/lib/utils/timezone");
+    return taiwanYear();
   },
   
   /**
