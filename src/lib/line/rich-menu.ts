@@ -1,5 +1,3 @@
-import { BOT_NAME } from "@/lib/constants";
-
 /**
  * Rich Menu 配置
  * 四個按鈕：簽到、今日占卜、查看時程、新增 Deadline
@@ -11,7 +9,7 @@ export const RICH_MENU_CONFIG = {
     height: 1686,
   },
   selected: false,
-  name: `${BOT_NAME} 主選單`,
+  name: "Coby 主選單",
   chatBarText: "選單",
   areas: [
     // 左上：簽到

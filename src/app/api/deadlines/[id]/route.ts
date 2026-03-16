@@ -2,38 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { Logger } from "@/lib/utils/logger";
-import { parseToUTC } from "@/lib/utils/timezone";
+import { formatUtcToTaipei, parseTaipeiInputToUtc } from "@/lib/utils/date";
 
 export const dynamic = 'force-dynamic';
 
 const deadlineService = new DeadlineService();
 const userTokenService = new UserTokenService();
 
-/**
- * 驗證用戶是否有權限操作該 deadline
- */
-async function verifyDeadlineOwnership(
-  deadlineId: string,
-  lineUserId: string
-): Promise<boolean> {
-  try {
-    const deadline = await deadlineService.getDeadlineById(deadlineId);
-    if (!deadline) {
-      return false;
-    }
-
-    // 獲取用戶的所有 deadlines 來驗證所有權
-    const userDeadlines = await deadlineService.getDeadlinesByUser(
-      lineUserId,
-      undefined // 不限制狀態
-    );
-    const userDeadlineIds = userDeadlines.map((d) => d._id.toString());
-    
-    return userDeadlineIds.includes(deadlineId);
-  } catch (error) {
-    Logger.error("Verify deadline ownership error", { error, deadlineId, lineUserId });
-    return false;
-  }
+function formatDeadline(deadline: {
+  _id: { toString(): string };
+  title: string;
+  type: string;
+  dueDate: Date | string;
+  estimatedHours: number;
+  status: string;
+}) {
+  const dueDateUtc = deadline.dueDate instanceof Date ? deadline.dueDate : new Date(deadline.dueDate);
+  return {
+    id: deadline._id.toString(),
+    title: deadline.title,
+    type: deadline.type,
+    dueDate: dueDateUtc.toISOString(),
+    dueDateTaipei: formatUtcToTaipei(dueDateUtc, "YYYY-MM-DD HH:mm"),
+    estimatedHours: deadline.estimatedHours,
+    status: deadline.status,
+  };
 }
 
 export async function PATCH(
@@ -69,7 +62,7 @@ export async function PATCH(
     }
 
     // 驗證所有權
-    const hasPermission = await verifyDeadlineOwnership(deadlineId, userInfo.lineUserId);
+    const hasPermission = await deadlineService.isDeadlineOwnedByUser(deadlineId, userInfo.lineUserId);
     if (!hasPermission) {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
@@ -93,7 +86,7 @@ export async function PATCH(
       }
       updates.type = type;
     }
-    if (dueDate !== undefined) updates.dueDate = typeof dueDate === "string" ? parseToUTC(dueDate) : new Date(dueDate);
+    if (dueDate !== undefined) updates.dueDate = parseTaipeiInputToUtc(dueDate);
     if (estimatedHours !== undefined) updates.estimatedHours = estimatedHours;
     if (status !== undefined) {
       const validStatuses = ["pending", "done"];
@@ -115,21 +108,9 @@ export async function PATCH(
       );
     }
 
-    // 格式化回應
-    const formattedDeadline = {
-      id: deadline._id.toString(),
-      title: deadline.title,
-      type: deadline.type,
-      dueDate: deadline.dueDate instanceof Date
-        ? deadline.dueDate.toISOString()
-        : new Date(deadline.dueDate).toISOString(),
-      estimatedHours: deadline.estimatedHours,
-      status: deadline.status,
-    };
-
     return NextResponse.json({
       success: true,
-      data: formattedDeadline,
+      data: formatDeadline(deadline as any),
     });
   } catch (error) {
     Logger.error("Update deadline error", { error });
@@ -173,7 +154,7 @@ export async function DELETE(
     }
 
     // 驗證所有權
-    const hasPermission = await verifyDeadlineOwnership(deadlineId, userInfo.lineUserId);
+    const hasPermission = await deadlineService.isDeadlineOwnedByUser(deadlineId, userInfo.lineUserId);
     if (!hasPermission) {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },

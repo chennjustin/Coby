@@ -1,12 +1,19 @@
 # Coby
 
-# LINE ID 在這：@445kyihz
+# LINE ID：@445kyihz
 
 # 後台網址：https://line-bot-taupe-three.vercel.app
 
 ## 專案簡介
 
 「Coby」是一個整合 LINE Messaging API 的智能時間管理助手，使用 LLM 進行自然語言理解，自動為使用者的作業、專題和考試安排學習時程。系統會根據截止日期、使用者偏好和現有行程，分配學習時間，讓用戶不再因為忘記作業而熬夜趕工。
+
+## 重要更新
+
+- Bot 名稱已統一為 `Coby`
+- 時間策略統一為「資料庫存 UTC、顯示轉 `Asia/Taipei`」
+- 新增人格設定檔：`docs/persona/coby-persona.md`
+- 新增資料 schema 說明：`docs/data-schema.md`
 
 ## 核心功能
 
@@ -142,6 +149,18 @@ npm run dev
 
 4. 開啟瀏覽器訪問 `http://localhost:3000`
 
+## 測試
+
+```bash
+npm run test
+```
+
+目前測試涵蓋：
+- 台灣時間輸入 (`YYYY-MM-DD`, `YYYY-MM-DDTHH:mm`) 轉 UTC
+- UTC -> 台灣顯示轉換
+- 跨日時間段（23:30~00:30）
+- 以台灣日界線計算 `daysLeft`
+
 ## 專案結構
 
 ```
@@ -164,6 +183,7 @@ src/
 │   ├── llm/              # LLM 客戶端
 │   └── utils/            # 工具函數
 ├── models/                # Mongoose 資料模型
+├── repositories/          # 資料存取層（DB Query 集中管理）
 ├── services/              # 業務邏輯層
 │   ├── deadline/         # Deadline 服務
 │   ├── llm/              # LLM 服務（意圖識別、排程等）
@@ -171,6 +191,25 @@ src/
 │   └── study-block/      # Study Block 服務
 └── types/                 # TypeScript 類型定義
 ```
+
+## 架構說明（重構後）
+
+- `app/api/*`：只負責驗證、呼叫 service、統一回應格式
+- `services/*`：商業規則（排程、deadline 流程、權限判斷）
+- `repositories/*`：Mongoose 查詢與資料存取
+- `models/*`：Schema 與索引
+
+### 事件流程
+
+1. LINE Webhook 進入 `app/api/webhook/line`
+2. handler 解析意圖並呼叫 service
+3. service 透過 repository 存取資料庫
+4. service 回傳結果給 handler / route，再回應給 LINE 或前端
+
+### 未來功能擴充建議
+
+- 新增「待辦清單」：`services/todo` + `repositories/todo.repository.ts` + `models/Todo.ts`
+- 新增「提醒功能」：`services/reminder`，由 service 負責排程規則，route 僅提供 CRUD API
 
 ## API 端點
 

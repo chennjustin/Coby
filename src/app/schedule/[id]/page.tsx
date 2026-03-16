@@ -58,7 +58,7 @@ function DeadlineDetailContent() {
 
         if (!data.success) {
           if (response.status === 401) {
-            setError("無效的 token，請重新從 LINE Bot 開啟時程表");
+            setError("無效的 token，請重新從 Coby 開啟時程表");
           } else if (response.status === 403) {
             setError("無權限訪問此 deadline");
           } else if (response.status === 404) {
@@ -239,7 +239,7 @@ function DeadlineDetailContent() {
 
         {/* Footer */}
         <div className="mt-6 text-center text-sm text-gray-500">
-          <p>此頁面為只讀模式，編輯請回到 LINE Bot</p>
+          <p>此頁面為只讀模式，編輯請回到 Coby</p>
         </div>
       </div>
     </div>

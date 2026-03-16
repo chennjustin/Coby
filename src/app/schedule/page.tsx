@@ -4,7 +4,6 @@ import { useState, Suspense, useMemo, useCallback, useEffect, useRef } from "rea
 import { useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
 import { useDeadlines, useStudyBlocks, Deadline, StudyBlock } from "@/hooks/useScheduleData";
-import { parseToUTC } from "@/lib/utils/timezone";
 
 // 時間軸配置
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 8); // 08:00 - 24:00
@@ -392,7 +391,7 @@ function ScheduleContent() {
       }
 
       const startTime = new Date(block.startTime);
-      const newEndTime = dayjs(startTime).add(pending.newDuration, "hour").toDate();
+      const newEndTime = dayjs(startTime).add(pending.newDuration, "hour").format("YYYY-MM-DDTHH:mm");
 
       try {
         const url = new URL(`${window.location.origin}/api/study-blocks/${pending.blockId}`);
@@ -402,7 +401,7 @@ function ScheduleContent() {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            endTime: newEndTime.toISOString(),
+            endTime: newEndTime,
             duration: pending.newDuration,
           }),
         });
@@ -547,7 +546,7 @@ function ScheduleContent() {
       <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
         <div className="text-center">
           <div className="text-lg font-light text-red-700 mb-2">錯誤</div>
-          <div className="text-sm text-gray-500">缺少 token 參數，請從 LINE Bot 開啟時程表</div>
+          <div className="text-sm text-gray-500">缺少 token 參數，請從 Coby 開啟時程表</div>
         </div>
       </div>
     );
@@ -1129,15 +1128,15 @@ function DetailPanel({
         body = {
           title: formData.title,
           type: formData.type,
-          dueDate: parseToUTC(formData.dueDate, formData.dueTime).toISOString(),
+          dueDate: `${formData.dueDate}T${formData.dueTime}`,
           estimatedHours: formData.estimatedHours,
         };
       } else {
         const block = item.data as StudyBlock;
         url = `${window.location.origin}/api/study-blocks/${block.id}?token=${encodeURIComponent(token)}`;
         body = {
-          startTime: parseToUTC(formData.startTime).toISOString(),
-          endTime: parseToUTC(formData.endTime).toISOString(),
+          startTime: formData.startTime,
+          endTime: formData.endTime,
           duration: formData.duration,
           title: formData.title,
         };
@@ -1445,15 +1444,13 @@ function AddDeadlineModal({
 
     try {
       const url = `${window.location.origin}/api/deadlines?token=${encodeURIComponent(token)}`;
-      const dueDateTime = parseToUTC(formData.dueDate, formData.dueTime);
-
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: formData.title,
           type: formData.type,
-          dueDate: dueDateTime.toISOString(),
+          dueDate: `${formData.dueDate}T${formData.dueTime}`,
           estimatedHours: formData.estimatedHours,
         }),
       });

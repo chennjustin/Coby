@@ -8,7 +8,10 @@ export const APP_CONFIG = {
    * 當前年份
    * 用於日期解析和 LLM prompt
    */
-  CURRENT_YEAR: 2025,
+  get CURRENT_YEAR(): number {
+    const { getTaiwanNow } = require("@/lib/utils/date");
+    return getTaiwanNow().year();
+  },
   
   /**
    * 當前日期（台灣時區）

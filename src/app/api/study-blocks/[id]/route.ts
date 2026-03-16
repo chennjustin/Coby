@@ -1,39 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import { StudyBlockService } from "@/services/study-block/study-block.service";
-import { parseToUTC } from "@/lib/utils/timezone";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { Logger } from "@/lib/utils/logger";
-import StudyBlock from "@/models/StudyBlock";
-import connectDB from "@/lib/db/mongoose";
+import { formatUtcToTaipei, parseTaipeiInputToUtc } from "@/lib/utils/date";
 
 export const dynamic = "force-dynamic";
 
 const studyBlockService = new StudyBlockService();
 const userTokenService = new UserTokenService();
 
-/**
- * 驗證用戶是否有權限操作該 study block
- */
-async function verifyBlockOwnership(
-  blockId: string,
-  lineUserId: string
-): Promise<boolean> {
-  try {
-    await connectDB();
-    const block = await StudyBlock.findById(blockId).populate("userId");
-    if (!block) {
-      return false;
-    }
-
-    // 獲取用戶的所有 blocks 來驗證所有權
-    const userBlocks = await studyBlockService.getStudyBlocksByUser(lineUserId);
-    const userBlockIds = userBlocks.map((b) => b._id.toString());
-
-    return userBlockIds.includes(blockId);
-  } catch (error) {
-    Logger.error("Verify block ownership error", { error, blockId, lineUserId });
-    return false;
-  }
+function formatStudyBlock(block: {
+  _id: { toString(): string };
+  userId: { toString(): string };
+  deadlineId: { toString(): string };
+  date: Date | string;
+  startTime: Date | string;
+  endTime: Date | string;
+  duration: number;
+  title: string;
+  blockIndex: number;
+  totalBlocks: number;
+  status: string;
+}) {
+  const dateUtc = block.date instanceof Date ? block.date : new Date(block.date);
+  const startUtc = block.startTime instanceof Date ? block.startTime : new Date(block.startTime);
+  const endUtc = block.endTime instanceof Date ? block.endTime : new Date(block.endTime);
+  return {
+    id: block._id.toString(),
+    userId: block.userId.toString(),
+    deadlineId: block.deadlineId.toString(),
+    date: dateUtc.toISOString(),
+    dateTaipei: formatUtcToTaipei(dateUtc, "YYYY-MM-DD"),
+    startTime: startUtc.toISOString(),
+    startTimeTaipei: formatUtcToTaipei(startUtc, "YYYY-MM-DD HH:mm"),
+    endTime: endUtc.toISOString(),
+    endTimeTaipei: formatUtcToTaipei(endUtc, "YYYY-MM-DD HH:mm"),
+    duration: block.duration,
+    title: block.title,
+    blockIndex: block.blockIndex,
+    totalBlocks: block.totalBlocks,
+    status: block.status,
+  };
 }
 
 export async function PATCH(
@@ -69,7 +76,7 @@ export async function PATCH(
     }
 
     // 驗證所有權
-    const hasPermission = await verifyBlockOwnership(blockId, userInfo.lineUserId);
+    const hasPermission = await studyBlockService.isStudyBlockOwnedByUser(blockId, userInfo.lineUserId);
     if (!hasPermission) {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },
@@ -82,15 +89,15 @@ export async function PATCH(
 
     // 構建更新對象
     const updates: any = {};
-    if (date !== undefined) updates.date = typeof date === "string" ? parseToUTC(date) : new Date(date);
-    if (startTime !== undefined) {
-      const start = typeof startTime === "string" ? parseToUTC(startTime) : new Date(startTime);
-      updates.startTime = start;
-      if (endTime === undefined && duration !== undefined) {
-        updates.endTime = new Date(start.getTime() + duration * 60 * 60 * 1000);
-      }
+    if (date !== undefined) updates.date = parseTaipeiInputToUtc(date);
+    if (startTime !== undefined) updates.startTime = parseTaipeiInputToUtc(startTime);
+    if (endTime !== undefined) {
+      updates.endTime = parseTaipeiInputToUtc(endTime);
+    } else if (startTime !== undefined && duration !== undefined) {
+      // 如果只更新了 startTime 和 duration，自動計算 endTime
+      const start = parseTaipeiInputToUtc(startTime);
+      updates.endTime = new Date(start.getTime() + duration * 60 * 60 * 1000);
     }
-    if (endTime !== undefined) updates.endTime = typeof endTime === "string" ? parseToUTC(endTime) : new Date(endTime);
     if (duration !== undefined) updates.duration = duration;
     if (title !== undefined) updates.title = title;
     if (status !== undefined) {
@@ -113,24 +120,9 @@ export async function PATCH(
       );
     }
 
-    // 格式化回應
-    const formattedBlock = {
-      id: block._id.toString(),
-      userId: block.userId.toString(),
-      deadlineId: block.deadlineId.toString(),
-      date: block.date instanceof Date ? block.date.toISOString() : new Date(block.date).toISOString(),
-      startTime: block.startTime instanceof Date ? block.startTime.toISOString() : new Date(block.startTime).toISOString(),
-      endTime: block.endTime instanceof Date ? block.endTime.toISOString() : new Date(block.endTime).toISOString(),
-      duration: block.duration,
-      title: block.title,
-      blockIndex: block.blockIndex,
-      totalBlocks: block.totalBlocks,
-      status: block.status,
-    };
-
     return NextResponse.json({
       success: true,
-      data: formattedBlock,
+      data: formatStudyBlock(block as any),
     });
   } catch (error) {
     Logger.error("Update study block error", { error });
@@ -174,7 +166,7 @@ export async function DELETE(
     }
 
     // 驗證所有權
-    const hasPermission = await verifyBlockOwnership(blockId, userInfo.lineUserId);
+    const hasPermission = await studyBlockService.isStudyBlockOwnedByUser(blockId, userInfo.lineUserId);
     if (!hasPermission) {
       return NextResponse.json(
         { success: false, error: "Unauthorized access" },

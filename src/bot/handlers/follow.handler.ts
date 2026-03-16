@@ -1,7 +1,6 @@
 import { BotContext } from "@/types/bot";
 import { LineMessagingClient } from "@/lib/line/client";
 import { Logger } from "@/lib/utils/logger";
-import { BOT_NAME } from "@/lib/constants";
 
 const lineClient = new LineMessagingClient();
 
@@ -18,10 +17,10 @@ export async function handleFollow(context: BotContext) {
     }
 
     // 發送歡迎訊息（帶 Quick Reply）
-    const welcomeMessage = 
-`🎉 歡迎使用「${BOT_NAME}」！
+    const welcomeMessage =
+`🎉 歡迎使用「Coby」！
 
-我是你的時間管理小幫手，幫你順利度過每一個期中期末！
+我是 Coby，你的 LINE 學習時程助手，幫你更穩定地管理作業、專題與考試！
 
 📌 主要功能介紹
 
@@ -46,7 +45,7 @@ export async function handleFollow(context: BotContext) {
 
 我會自動判斷你的需求。
 
-🌟 希望這個 Bot 能陪你一起成為時間管理大師，不再被 deadline 追著跑！`;
+🌟 希望 Coby 能陪你一起成為時間管理大師，不再被 deadline 追著跑！`;
 
     // 發送歡迎訊息並附上 Quick Reply
     await lineClient.sendQuickReply(replyToken, welcomeMessage, [
@@ -64,7 +63,7 @@ export async function handleFollow(context: BotContext) {
     const replyToken = context.event.replyToken;
     if (replyToken) {
       try {
-        await lineClient.sendQuickReply(replyToken, `歡迎使用 ${BOT_NAME}！`, [
+        await lineClient.sendQuickReply(replyToken, "歡迎使用 Coby！", [
           { label: "🍀 每日簽到", text: "簽到" },
           { label: "🔮 抽!!!", text: "今日占卜" },
           { label: "📅 查看時程", text: "查看時程" },

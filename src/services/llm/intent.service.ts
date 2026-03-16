@@ -30,7 +30,7 @@ export class IntentService {
    */
   async detectIntentAndExtract(text: string): Promise<IntentResult> {
     try {
-      const prompt = `你是一個 LINE Bot 的意圖識別系統，專門處理台灣大學生的對話。
+      const prompt = `你是一個 Coby LINE Bot 的意圖識別系統，專門處理台灣大學生的對話。
 
 請分析以下使用者訊息，識別意圖並提取相關實體。
 

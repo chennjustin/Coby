@@ -6,7 +6,7 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-8 py-4">
         <nav className="flex items-center justify-between">
           <Link href="/" className="text-2xl font-bold text-blue-600">
-            Line Bot 管理後台
+            Coby 管理後台
           </Link>
           <div className="flex gap-4">
             <Link

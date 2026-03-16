@@ -3,13 +3,51 @@ import { StudyBlockService } from "@/services/study-block/study-block.service";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { Logger } from "@/lib/utils/logger";
-import { parseToUTC } from "@/lib/utils/timezone";
+import { normalizeDateRange, parseTaipeiInputToUtc, formatUtcToTaipei } from "@/lib/utils/date";
 
 export const dynamic = "force-dynamic";
 
 const studyBlockService = new StudyBlockService();
 const userTokenService = new UserTokenService();
 const deadlineService = new DeadlineService();
+
+function formatStudyBlock(
+  block: {
+    _id: { toString(): string };
+    userId: { toString(): string };
+    deadlineId: { toString(): string };
+    date: Date | string;
+    startTime: Date | string;
+    endTime: Date | string;
+    duration: number;
+    title: string;
+    blockIndex: number;
+    totalBlocks: number;
+    status: string;
+  },
+  deadlineType: string
+) {
+  const dateUtc = block.date instanceof Date ? block.date : new Date(block.date);
+  const startUtc = block.startTime instanceof Date ? block.startTime : new Date(block.startTime);
+  const endUtc = block.endTime instanceof Date ? block.endTime : new Date(block.endTime);
+  return {
+    id: block._id.toString(),
+    userId: block.userId.toString(),
+    deadlineId: block.deadlineId.toString(),
+    date: dateUtc.toISOString(),
+    dateTaipei: formatUtcToTaipei(dateUtc, "YYYY-MM-DD"),
+    startTime: startUtc.toISOString(),
+    startTimeTaipei: formatUtcToTaipei(startUtc, "YYYY-MM-DD HH:mm"),
+    endTime: endUtc.toISOString(),
+    endTimeTaipei: formatUtcToTaipei(endUtc, "YYYY-MM-DD HH:mm"),
+    duration: block.duration,
+    title: block.title,
+    blockIndex: block.blockIndex,
+    totalBlocks: block.totalBlocks,
+    status: block.status,
+    type: deadlineType || "other",
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,8 +80,7 @@ export async function GET(request: NextRequest) {
       blocks = await studyBlockService.getStudyBlocksByDeadline(deadlineId);
     } else {
       // 取得使用者的 blocks（可選時間範圍）
-      const start = startDate ? new Date(startDate) : undefined;
-      const end = endDate ? new Date(endDate) : undefined;
+      const { start, end } = normalizeDateRange(startDate || undefined, endDate || undefined);
       
       blocks = await studyBlockService.getStudyBlocksByUser(
         userInfo.lineUserId,
@@ -61,25 +98,11 @@ export async function GET(request: NextRequest) {
     });
 
     // 格式化回應，並獲取每個 block 對應的 deadline type
-    const formattedBlocks = await Promise.all(
-      blocks.map(async (block: any) => {
-        // 獲取 deadline 資訊以取得 type
-        const deadline = await deadlineService.getDeadlineById(block.deadlineId.toString());
-        return {
-          id: block._id.toString(),
-          userId: block.userId.toString(),
-          deadlineId: block.deadlineId.toString(),
-          date: block.date instanceof Date ? block.date.toISOString() : new Date(block.date).toISOString(),
-          startTime: block.startTime instanceof Date ? block.startTime.toISOString() : new Date(block.startTime).toISOString(),
-          endTime: block.endTime instanceof Date ? block.endTime.toISOString() : new Date(block.endTime).toISOString(),
-          duration: block.duration,
-          title: block.title,
-          blockIndex: block.blockIndex,
-          totalBlocks: block.totalBlocks,
-          status: block.status,
-          type: deadline?.type || "other", // 從 deadline 獲取 type
-        };
-      })
+    const uniqueDeadlineIds = Array.from(new Set(blocks.map((b: any) => b.deadlineId.toString())));
+    const deadlines = await deadlineService.getDeadlinesByIds(uniqueDeadlineIds);
+    const deadlineTypeMap = new Map(deadlines.map((d) => [d._id.toString(), d.type]));
+    const formattedBlocks = blocks.map((block: any) =>
+      formatStudyBlock(block, deadlineTypeMap.get(block.deadlineId.toString()) || "other")
     );
 
     return NextResponse.json({
@@ -127,14 +150,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const start = typeof startTime === "string" ? parseToUTC(startTime) : new Date(startTime);
+    const start = parseTaipeiInputToUtc(startTime);
     const end = new Date(start.getTime() + duration * 60 * 60 * 1000);
 
-    // 建立 block（date、startTime、endTime 以 UTC 儲存）
+    // 建立 block
     const block = await studyBlockService.createStudyBlock({
       userId: userInfo.lineUserId,
       deadlineId,
-      date: typeof date === "string" ? parseToUTC(date) : new Date(date),
+      date: parseTaipeiInputToUtc(date),
       startTime: start,
       endTime: end,
       duration,
@@ -143,24 +166,9 @@ export async function POST(request: NextRequest) {
       totalBlocks: totalBlocks || 1,
     });
 
-    // 格式化回應
-    const formattedBlock = {
-      id: block._id.toString(),
-      userId: block.userId.toString(),
-      deadlineId: block.deadlineId.toString(),
-      date: block.date instanceof Date ? block.date.toISOString() : new Date(block.date).toISOString(),
-      startTime: block.startTime instanceof Date ? block.startTime.toISOString() : new Date(block.startTime).toISOString(),
-      endTime: block.endTime instanceof Date ? block.endTime.toISOString() : new Date(block.endTime).toISOString(),
-      duration: block.duration,
-      title: block.title,
-      blockIndex: block.blockIndex,
-      totalBlocks: block.totalBlocks,
-      status: block.status,
-    };
-
     return NextResponse.json({
       success: true,
-      data: formattedBlock,
+      data: formatStudyBlock(block as any, "other"),
     });
   } catch (error) {
     Logger.error("Create study block error", { error });

@@ -10,10 +10,10 @@ import { Logger } from "@/lib/utils/logger";
 import User from "@/models/User";
 import { IDeadline } from "@/models/Deadline";
 import connectDB from "@/lib/db/mongoose";
-import { parseToUTC, formatForDisplay } from "@/lib/utils/timezone";
 import dayjs from "dayjs";
 import timezone from "dayjs/plugin/timezone";
 import utc from "dayjs/plugin/utc";
+import { parseTaipeiInputToUtc } from "@/lib/utils/date";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -375,18 +375,18 @@ export async function handleAddDeadlineStepByStep(
         if (dateTimeMatch) {
           const month = parseInt(dateTimeMatch[1]);
           const day = parseInt(dateTimeMatch[2]);
+          // 使用台灣時區的當前年份
           const { getTaiwanNow } = await import("@/lib/utils/date");
           const year = getTaiwanNow().year();
           const hour = dateTimeMatch[3] ? parseInt(dateTimeMatch[3]) : 23;
           const minute = dateTimeMatch[4] ? parseInt(dateTimeMatch[4]) : 59;
-          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-          dueDate = parseToUTC(dateStr, timeStr);
+          dueDate = parseTaipeiInputToUtc(`${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`);
         } else {
           // 使用 LLM 解析（支援完整日期時間）
           const parsedDateTime = await llmUtilsService.parseDateFromText(userInput);
           if (parsedDateTime) {
-            dueDate = parseToUTC(parsedDateTime);
+            // parsedDateTime 現在是 YYYY-MM-DDTHH:mm 格式
+            dueDate = parseTaipeiInputToUtc(parsedDateTime);
           }
         }
 
@@ -430,9 +430,11 @@ export async function handleAddDeadlineStepByStep(
           estimatedHours: hours,
         });
 
-        // 顯示確認資訊（flowData.dueDate 為 ISO 字串，以 UTC 儲存）
-        const dateDisplay = formatForDisplay(flowData.dueDate);
-        const summary = `請確認以下資訊：\n\n名稱：${flowData.title}\n類型：${flowData.type}\n截止日期時間：${dateDisplay}\n預估時間：${hours} 小時`;
+        // 顯示確認資訊
+        const dueDateObj = new Date(flowData.dueDate);
+        const dateStr = dueDateObj.toLocaleDateString("zh-TW");
+        const timeStr = dueDateObj.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+        const summary = `請確認以下資訊：\n\n名稱：${flowData.title}\n類型：${flowData.type}\n截止日期時間：${dateStr} ${timeStr}\n預估時間：${hours} 小時`;
 
         await lineClient.sendQuickReply(
           replyToken,
@@ -463,7 +465,7 @@ export async function handleAddDeadlineStepByStep(
             userId,
             title: flowData.title,
             type: flowData.type,
-            dueDate: new Date(flowData.dueDate),
+            dueDate: parseTaipeiInputToUtc(flowData.dueDate),
             estimatedHours: flowData.estimatedHours || 2,
           });
 
@@ -563,7 +565,7 @@ async function sendStepPrompt(
       break;
     }
     case "confirm": {
-      const summary = `請確認以下資訊：\n\n名稱：${flowData.title}\n類型：${flowData.type}\n截止日期：${formatForDisplay(flowData.dueDate)}\n預估時間：${flowData.estimatedHours || 2} 小時`;
+      const summary = `請確認以下資訊：\n\n名稱：${flowData.title}\n類型：${flowData.type}\n截止日期：${new Date(flowData.dueDate).toLocaleDateString("zh-TW")}\n預估時間：${flowData.estimatedHours || 2} 小時`;
       await lineClient.sendQuickReply(
         replyToken,
         summary,
@@ -741,9 +743,11 @@ export async function handleAddDeadlineNLP(
       estimatedHours: parsed.estimatedHours,
     });
 
-    // 顯示確認資訊（parsed.dueDate 為 YYYY-MM-DDTHH:mm，需正確解析為 UTC）
-    const dateDisplay = formatForDisplay(parseToUTC(parsed.dueDate));
-    const summary = `我解析到以下資訊：\n\n名稱：${parsed.title}\n類型：${parsed.type}\n截止日期時間：${dateDisplay}\n預估時間：${parsed.estimatedHours} 小時`;
+    // 顯示確認資訊
+    const dueDateObj = new Date(parsed.dueDate);
+    const dateStr = dueDateObj.toLocaleDateString("zh-TW");
+    const timeStr = dueDateObj.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+    const summary = `我解析到以下資訊：\n\n名稱：${parsed.title}\n類型：${parsed.type}\n截止日期時間：${dateStr} ${timeStr}\n預估時間：${parsed.estimatedHours} 小時`;
 
     if (replyToken) {
       await lineClient.sendQuickReply(
@@ -777,7 +781,14 @@ export async function handleConfirmNLPDeadline(
 
   try {
     const [title, type, dueDateStr, estimatedHoursStr] = dataString.split("|");
-    const dueDate = parseToUTC(dueDateStr);
+    // dueDateStr 現在可能是 YYYY-MM-DDTHH:mm 格式或 ISO 字串
+    let dueDate: Date;
+    if (dueDateStr.includes("T")) {
+      dueDate = parseTaipeiInputToUtc(dueDateStr);
+    } else {
+      // 如果只有日期，加上時間 23:59
+      dueDate = parseTaipeiInputToUtc(dueDateStr);
+    }
     const estimatedHours = parseInt(estimatedHoursStr) || 2;
 
     if (isNaN(dueDate.getTime())) {
@@ -871,13 +882,14 @@ export async function handleEditDeadline(
         }
         return;
       }
-      const dueDateObj = parseToUTC(parsedDateTime);
+      const dueDateObj = parseTaipeiInputToUtc(parsedDateTime);
       await deadlineService.updateDeadline(deadlineId, {
         dueDate: dueDateObj,
       });
-      const dateDisplay = formatForDisplay(dueDateObj);
+      const dateStr = dueDateObj.toLocaleDateString("zh-TW");
+      const timeStr = dueDateObj.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
       if (replyToken) {
-        await sendTextMessageWithQuickReply(replyToken, `✅ 已更新截止日期時間：${dateDisplay}`);
+        await sendTextMessageWithQuickReply(replyToken, `✅ 已更新截止日期時間：${dateStr} ${timeStr}`);
       }
     } else if (field === "時間" && newValue) {
       const hours = parseInt(newValue) || 2;

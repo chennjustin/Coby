@@ -2,6 +2,7 @@ import connectDB from "@/lib/db/mongoose";
 import StudyBlock, { IStudyBlock, StudyBlockStatus } from "@/models/StudyBlock";
 import User from "@/models/User";
 import { Logger } from "@/lib/utils/logger";
+import { StudyBlockRepository } from "@/repositories/study-block.repository";
 
 export interface CreateStudyBlockData {
   userId: string;
@@ -25,6 +26,8 @@ export interface UpdateStudyBlockData {
 }
 
 export class StudyBlockService {
+  private studyBlockRepository = new StudyBlockRepository();
+
   /**
    * 建立單個 Study Block
    */
@@ -36,7 +39,7 @@ export class StudyBlockService {
         throw new Error("User not found");
       }
 
-      const block = await StudyBlock.create({
+      const block = await this.studyBlockRepository.create({
         userId: user._id,
         deadlineId: data.deadlineId,
         date: data.date,
@@ -91,23 +94,7 @@ export class StudyBlockService {
         return [];
       }
 
-      const query: any = { userId: user._id };
-
-      if (startDate || endDate) {
-        query.startTime = {};
-        if (startDate) {
-          query.startTime.$gte = startDate;
-        }
-        if (endDate) {
-          query.startTime.$lte = endDate;
-        }
-      }
-
-      const blocks = await StudyBlock.find(query)
-        .sort({ startTime: 1 })
-        .exec();
-
-      return blocks;
+      return this.studyBlockRepository.findByUserId(user._id, startDate, endDate);
     } catch (error) {
       Logger.error("取得 Study Blocks 失敗", { error, userId });
       return [];
@@ -120,10 +107,7 @@ export class StudyBlockService {
   async getStudyBlocksByDeadline(deadlineId: string): Promise<IStudyBlock[]> {
     try {
       await connectDB();
-      const blocks = await StudyBlock.find({ deadlineId })
-        .sort({ blockIndex: 1 })
-        .exec();
-      return blocks;
+      return this.studyBlockRepository.findByDeadlineId(deadlineId);
     } catch (error) {
       Logger.error("取得 Deadline 的 Study Blocks 失敗", { error, deadlineId });
       return [];
@@ -139,10 +123,7 @@ export class StudyBlockService {
   ): Promise<IStudyBlock | null> {
     try {
       await connectDB();
-      const block = await StudyBlock.findByIdAndUpdate(id, updates, {
-        new: true,
-      }).exec();
-      return block;
+      return this.studyBlockRepository.updateById(id, updates as Partial<IStudyBlock>);
     } catch (error) {
       Logger.error("更新 Study Block 失敗", { error, id, updates });
       return null;
@@ -155,7 +136,7 @@ export class StudyBlockService {
   async deleteStudyBlock(id: string): Promise<void> {
     try {
       await connectDB();
-      await StudyBlock.findByIdAndDelete(id).exec();
+      await this.studyBlockRepository.deleteById(id);
     } catch (error) {
       Logger.error("刪除 Study Block 失敗", { error, id });
       throw error;
@@ -168,7 +149,7 @@ export class StudyBlockService {
   async deleteStudyBlocksByDeadline(deadlineId: string): Promise<void> {
     try {
       await connectDB();
-      await StudyBlock.deleteMany({ deadlineId }).exec();
+      await this.studyBlockRepository.deleteByDeadlineId(deadlineId);
     } catch (error) {
       Logger.error("刪除 Deadline 的 Study Blocks 失敗", { error, deadlineId });
       throw error;
@@ -181,12 +162,7 @@ export class StudyBlockService {
   async markBlockDone(id: string): Promise<IStudyBlock | null> {
     try {
       await connectDB();
-      const block = await StudyBlock.findByIdAndUpdate(
-        id,
-        { status: "done" },
-        { new: true }
-      ).exec();
-      return block;
+      return this.studyBlockRepository.updateById(id, { status: "done" } as Partial<IStudyBlock>);
     } catch (error) {
       Logger.error("標記 Study Block 完成失敗", { error, id });
       return null;
@@ -225,6 +201,15 @@ export class StudyBlockService {
         progress: 0,
       };
     }
+  }
+
+  async isStudyBlockOwnedByUser(blockId: string, lineUserId: string): Promise<boolean> {
+    await connectDB();
+    const user = await User.findOne({ lineUserId });
+    if (!user) {
+      return false;
+    }
+    return this.studyBlockRepository.isOwnedByUser(blockId, user._id);
   }
 }
 
