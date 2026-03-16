@@ -252,6 +252,20 @@ export class DeadlineService {
   }
 
   /**
+   * 根據多個 ID 批次取得 Deadline
+   */
+  async getDeadlinesByIds(ids: string[]): Promise<IDeadline[]> {
+    try {
+      await connectDB();
+      const deadlines = await Deadline.find({ _id: { $in: ids } }).exec();
+      return deadlines;
+    } catch (error) {
+      Logger.error("批次取得 Deadline 失敗", { error, ids });
+      return [];
+    }
+  }
+
+  /**
    * 驗證 Deadline 是否屬於指定使用者
    */
   async isDeadlineOwnedByUser(deadlineId: string, lineUserId: string): Promise<boolean> {
