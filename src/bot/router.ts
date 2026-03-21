@@ -25,6 +25,8 @@ import connectDB from "@/lib/db/mongoose";
 import User from "@/models/User";
 import Deadline from "@/models/Deadline";
 import Checkin from "@/models/Checkin";
+import { getMemoryProvider } from "@/memory/memory.factory";
+import { SavedItemRepository } from "@/repositories/saved-item.repository";
 
 const userStateService = new UserStateService();
 const intentService = new IntentService();
@@ -300,6 +302,15 @@ async function handleResetData(userId: string, replyToken: string) {
     const checkinResult = await Checkin.deleteMany({ userId: user._id });
     await userStateService.clearState(userId);
 
+    // 清除 Mem0 記憶和 SavedItem
+    const savedItemRepo = new SavedItemRepository();
+    const [savedItemCount] = await Promise.allSettled([
+      savedItemRepo.deleteByUserId(userId),
+      getMemoryProvider().deleteAll({ userId }),
+    ]);
+    const deletedSavedItems =
+      savedItemCount.status === "fulfilled" ? savedItemCount.value : 0;
+
     const { generateViewToken } = await import("@/lib/utils/token");
     user.viewToken = generateViewToken();
     await user.save();
@@ -308,6 +319,8 @@ async function handleResetData(userId: string, replyToken: string) {
       `✅ 資料已清除完成！\n\n` +
       `📝 待辦事項：刪除 ${deadlineResult.deletedCount || 0} 筆\n` +
       `🍀 簽到記錄：刪除 ${checkinResult.deletedCount || 0} 筆\n` +
+      `🧠 對話記錄：刪除 ${deletedSavedItems} 筆\n` +
+      `🧠 長期記憶：已清除\n` +
       `🔄 用戶狀態：已清除\n` +
       `🔑 Token：已重置\n\n` +
       `你的帳號已恢復到初始狀態。`;

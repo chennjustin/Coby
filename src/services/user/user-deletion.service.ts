@@ -4,8 +4,10 @@ import Deadline from "@/models/Deadline";
 import StudyBlock from "@/models/StudyBlock";
 import Checkin from "@/models/Checkin";
 import UserState from "@/models/UserState";
+import SavedItem from "@/models/SavedItem";
 import mongoose from "mongoose";
 import { Logger } from "@/lib/utils/logger";
+import { getMemoryProvider } from "@/memory/memory.factory";
 
 export class UserDeletionService {
   /**
@@ -21,6 +23,7 @@ export class UserDeletionService {
       checkins: number;
       userStates: number;
       sessions: number;
+      savedItems: number;
     };
   }> {
     try {
@@ -39,6 +42,8 @@ export class UserDeletionService {
           sessionsDeleted = sessionsResult.deletedCount || 0;
         }
         const userStatesResult = await UserState.deleteMany({ userId: lineUserId });
+        const savedItemsResult = await SavedItem.deleteMany({ userId: lineUserId });
+        getMemoryProvider().deleteAll({ userId: lineUserId }).catch(() => {});
         return {
           success: true,
           deleted: {
@@ -48,6 +53,7 @@ export class UserDeletionService {
             checkins: 0,
             userStates: userStatesResult.deletedCount || 0,
             sessions: sessionsDeleted,
+            savedItems: savedItemsResult.deletedCount || 0,
           },
         };
       }
@@ -60,6 +66,7 @@ export class UserDeletionService {
         checkins: 0,
         userStates: 0,
         sessions: 0,
+        savedItems: 0,
       };
 
       // 1. 刪除所有 StudyBlocks（先刪除，因為它們依賴 Deadline）
@@ -90,7 +97,16 @@ export class UserDeletionService {
         }
       }
 
-      // 6. 最後刪除 User
+      // 6. 刪除 SavedItems
+      const savedItemsResult = await SavedItem.deleteMany({ userId: lineUserId });
+      results.savedItems = savedItemsResult.deletedCount || 0;
+
+      // 7. 清除 Mem0 記憶
+      getMemoryProvider().deleteAll({ userId: lineUserId }).catch((err) => {
+        Logger.warn("清除 Mem0 記憶失敗", { error: err, lineUserId });
+      });
+
+      // 8. 最後刪除 User
       await User.deleteOne({ _id: userId });
       results.user = 1;
 
