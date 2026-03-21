@@ -35,3 +35,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# mem0 local history
+mem0_history.db
+*.db
+
