@@ -2,6 +2,8 @@ import { LLMClient, LLMMessage } from "@/lib/llm/client";
 import { OpenAIClient } from "@/lib/llm/openai";
 import { handleLLMError } from "@/lib/llm/fallback";
 import { Logger } from "@/lib/utils/logger";
+import { getMemoryProvider } from "@/memory/memory.factory";
+import { MemoryProvider } from "@/memory/types";
 import fs from "fs";
 import path from "path";
 
@@ -23,6 +25,7 @@ const SYSTEM_PROMPT = personalityContent
 
 export class ChatService {
   private llmClient: LLMClient;
+  private memoryProvider: MemoryProvider;
 
   constructor() {
     try {
@@ -31,6 +34,7 @@ export class ChatService {
       Logger.error("Failed to initialize LLM client", { error });
       throw error;
     }
+    this.memoryProvider = getMemoryProvider();
   }
 
   async generateResponse(
@@ -39,12 +43,25 @@ export class ChatService {
     userData?: {
       deadlines?: Array<{ title: string; dueDate: string; estimatedHours: number; type: string; id?: string }>;
       studyBlocks?: Array<{ title: string; startTime: string; endTime: string; duration: number; deadlineId: string; deadlineTitle?: string; deadlineEstimatedHours?: number }>;
-    }
+    },
+    userId?: string
   ): Promise<string> {
     try {
-      // 構建系統提示，包含用戶資料
       let systemContent = SYSTEM_PROMPT;
-      
+
+      // RAG: 搜尋 Mem0 記憶並注入 system prompt
+      if (userId) {
+        const memories = await this.searchMemories(userMessage, userId);
+        if (memories.length > 0) {
+          systemContent += "\n\n**用戶長期記憶（跨對話累積的資訊）：**\n";
+          memories.forEach((m, i) => {
+            systemContent += `${i + 1}. ${m}\n`;
+          });
+          systemContent +=
+            "\n請善用上述記憶來個人化你的回應。如果記憶中包含使用者的偏好或習慣，在給建議時應參考這些資訊。";
+        }
+      }
+
       if (userData) {
         systemContent += "\n\n**用戶資料：**\n";
         
@@ -66,7 +83,6 @@ export class ChatService {
         
         if (userData.studyBlocks && userData.studyBlocks.length > 0) {
           systemContent += "\n**用戶的 Study Blocks（已安排的學習時間）：**\n";
-          // 按 deadlineId 分組
           const blocksByDeadline = new Map<string, typeof userData.studyBlocks>();
           userData.studyBlocks.forEach((block: any) => {
             if (!blocksByDeadline.has(block.deadlineId)) {
@@ -75,12 +91,10 @@ export class ChatService {
             blocksByDeadline.get(block.deadlineId)!.push(block);
           });
           
-          blocksByDeadline.forEach((blocks, deadlineId) => {
+          blocksByDeadline.forEach((blocks, _deadlineId) => {
             const firstBlock = blocks[0] as any;
             const deadlineTitle = firstBlock.deadlineTitle || firstBlock.title.split("（進度")[0];
             const deadlineEstimatedHours = firstBlock.deadlineEstimatedHours || 0;
-            
-            // 計算該 deadline 的總時數
             const totalHours = blocks.reduce((sum: number, b: any) => sum + b.duration, 0);
             
             systemContent += `\n**${deadlineTitle}**（預估 ${deadlineEstimatedHours} 小時，已安排 ${totalHours} 小時）：\n`;
@@ -107,7 +121,6 @@ export class ChatService {
         systemContent += "\n**重要提醒：**當用戶詢問關於學習時間分配、讀書計畫、已安排的時程等問題時，你必須根據上述「用戶的 Study Blocks」資料來回答，告訴用戶具體的日期和時間，而不是給出通用的時間分配建議。";
       }
       
-      // 構建訊息
       const messages: LLMMessage[] = [
         {
           role: "system",
@@ -115,7 +128,6 @@ export class ChatService {
         },
       ];
 
-      // 加入歷史訊息（最多保留最近 10 條）
       const recentHistory = history.slice(-10);
       for (const msg of recentHistory) {
         messages.push({
@@ -124,18 +136,15 @@ export class ChatService {
         });
       }
 
-      // 加入當前使用者訊息
       messages.push({
         role: "user",
         content: userMessage,
       });
       
-      // 添加超時處理（30秒）
       const timeoutPromise = new Promise<string>((_, reject) => {
         setTimeout(() => reject(new Error("Request timeout after 30s")), 30000);
       });
 
-      // 調用 LLM
       const responsePromise = this.llmClient.chat(messages);
       const response = await Promise.race([responsePromise, timeoutPromise]);
       
@@ -150,10 +159,44 @@ export class ChatService {
         userMessage: userMessage.substring(0, 50),
       });
       
-      // 返回錯誤訊息
       const fallbackMessage = handleLLMError(error);
       return fallbackMessage;
     }
   }
-}
 
+  /**
+   * 儲存對話到 Mem0（fire-and-forget，不阻塞主流程）
+   */
+  async storeMemory(
+    userId: string,
+    userMessage: string,
+    assistantResponse: string
+  ): Promise<void> {
+    try {
+      await this.memoryProvider.add(
+        [
+          { role: "user", content: userMessage },
+          { role: "assistant", content: assistantResponse },
+        ],
+        { userId, metadata: { source: "chat" } }
+      );
+    } catch (error) {
+      Logger.error("儲存記憶失敗（不影響主流程）", { error, userId });
+    }
+  }
+
+  private async searchMemories(query: string, userId: string): Promise<string[]> {
+    try {
+      const results = await this.memoryProvider.search(query, {
+        userId,
+        limit: 5,
+      });
+      return results
+        .filter((r) => r.score > 0.3)
+        .map((r) => r.memory);
+    } catch (error) {
+      Logger.error("搜尋記憶失敗（不影響主流程）", { error, userId });
+      return [];
+    }
+  }
+}
