@@ -4,6 +4,7 @@ export function getMemoryConfig(): Record<string, any> {
   const qdrantUrl = process.env.QDRANT_URL;
   const qdrantApiKey = process.env.QDRANT_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY || "";
+  const isVercel = !!process.env.VERCEL;
 
   const useQdrant = qdrantUrl || process.env.QDRANT_HOST;
 
@@ -26,7 +27,7 @@ export function getMemoryConfig(): Record<string, any> {
         },
       };
 
-  return {
+  const config: Record<string, any> = {
     version: "v1.1",
     embedder: {
       provider: "openai",
@@ -43,6 +44,16 @@ export function getMemoryConfig(): Record<string, any> {
         model: process.env.MEM0_LLM_MODEL || "gpt-4.1-nano",
       },
     },
-    historyDbPath: process.env.MEM0_HISTORY_DB_PATH || "mem0_history.db",
   };
+
+  // Vercel serverless 沒有持久檔案系統，停用 SQLite history
+  // 對話記錄已透過 SavedItemRepository 存到 MongoDB
+  if (isVercel) {
+    config.disableHistory = true;
+  } else {
+    config.historyDbPath =
+      process.env.MEM0_HISTORY_DB_PATH || "mem0_history.db";
+  }
+
+  return config;
 }
