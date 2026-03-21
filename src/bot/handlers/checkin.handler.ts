@@ -2,6 +2,7 @@ import { CheckinService } from "@/services/checkin/checkin.service";
 import { DeadlineService } from "@/services/deadline/deadline.service";
 import { UserTokenService } from "@/services/user/user-token.service";
 import { QuoteService } from "@/services/quote/quote.service";
+import { FeedbackService } from "@/services/feedback/feedback.service";
 import { LineMessagingClient } from "@/lib/line/client";
 import { buildScheduleViewFlexMessage } from "@/lib/line/flex-messages";
 import { sendQuickReplyWithMenu, QUICK_REPLY_ITEMS } from "@/bot/constants";
@@ -13,6 +14,17 @@ const deadlineService = new DeadlineService();
 const userTokenService = new UserTokenService();
 const lineClient = new LineMessagingClient();
 const quoteService = new QuoteService();
+let feedbackService: FeedbackService | null = null;
+
+function getFeedbackService(): FeedbackService | null {
+  if (feedbackService) return feedbackService;
+  try {
+    feedbackService = new FeedbackService();
+    return feedbackService;
+  } catch {
+    return null;
+  }
+}
 
 export async function handleCheckIn(userId: string, replyToken: string) {
   try {
@@ -20,6 +32,16 @@ export async function handleCheckIn(userId: string, replyToken: string) {
     const todayDeadlines = await deadlineService.getTodayDeadlines(userId);
     const viewToken = await userTokenService.getOrCreateViewToken(userId);
     const appUrl = getAppUrl();
+
+    // 非阻塞取得個人化回饋
+    const fb = getFeedbackService();
+    const feedbackPromise = fb
+      ? fb.generateFeedback(userId, {
+          trigger: "checkin",
+          consecutiveDays: result.consecutiveDays,
+          pendingDeadlineCount: todayDeadlines.length,
+        })
+      : Promise.resolve(null);
 
     if (result.alreadyChecked) {
       let message = `你今天已經簽到過囉，連續簽到 ${result.consecutiveDays} 天`;
@@ -38,6 +60,9 @@ export async function handleCheckIn(userId: string, replyToken: string) {
           message += `${index + 1}. ${typeEmoji} ${deadline.title}\n`;
         });
       }
+
+      const feedback = await feedbackPromise;
+      if (feedback) message += `\n\n💡 ${feedback}`;
 
       await sendQuickReplyWithMenu(replyToken, message);
       Logger.info("簽到回應（已簽到）", { userId, consecutiveDays: result.consecutiveDays });
@@ -61,6 +86,9 @@ export async function handleCheckIn(userId: string, replyToken: string) {
       } else {
         message += `\n\n📅 今天沒有任何待辦事項，可以好好休息！`;
       }
+
+      const feedback = await feedbackPromise;
+      if (feedback) message += `\n\n💡 ${feedback}`;
 
       await sendQuickReplyWithMenu(replyToken, message);
       Logger.info("簽到回應（成功）", { userId, consecutiveDays: result.consecutiveDays });

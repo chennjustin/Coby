@@ -3,6 +3,7 @@ import { ChatService } from "@/services/llm/chat.service";
 import { UserStateService } from "@/services/user-state/user-state.service";
 import { StudyBlockService } from "@/services/study-block/study-block.service";
 import { SavedItemRepository } from "@/repositories/saved-item.repository";
+import { RecommendationService } from "@/services/recommendation/recommendation.service";
 import { sendQuickReplyWithMenu } from "@/bot/constants";
 import { Logger } from "@/lib/utils/logger";
 import connectDB from "@/lib/db/mongoose";
@@ -11,6 +12,17 @@ import Deadline, { IDeadline } from "@/models/Deadline";
 
 const userStateService = new UserStateService();
 const savedItemRepo = new SavedItemRepository();
+let recommendationService: RecommendationService | null = null;
+
+function getRecommendationService(): RecommendationService | null {
+  if (recommendationService) return recommendationService;
+  try {
+    recommendationService = new RecommendationService();
+    return recommendationService;
+  } catch {
+    return null;
+  }
+}
 
 export async function handleDefaultChat(
   context: BotContext,
@@ -147,6 +159,22 @@ export async function handleDefaultChat(
     let finalResponse = response;
     if (rescheduleMessage) {
       finalResponse = rescheduleMessage + "\n\n" + response;
+    }
+
+    // 當使用者詢問建議相關問題時，附加個人化推薦
+    const recSvc = getRecommendationService();
+    if (recSvc && recSvc.shouldRecommend(text) && userData?.deadlines?.length) {
+      try {
+        const recommendation = await recSvc.generateRecommendation(userId, {
+          deadlines: userData.deadlines,
+          userMessage: text,
+        });
+        if (recommendation) {
+          finalResponse += `\n\n📌 個人化建議：${recommendation}`;
+        }
+      } catch (err) {
+        Logger.error("生成推薦失敗（不影響主流程）", { error: err });
+      }
     }
 
     await sendQuickReplyWithMenu(replyToken, finalResponse);
