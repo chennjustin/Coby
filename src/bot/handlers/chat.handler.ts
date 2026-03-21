@@ -2,6 +2,7 @@ import { BotContext } from "@/types/bot";
 import { ChatService } from "@/services/llm/chat.service";
 import { UserStateService } from "@/services/user-state/user-state.service";
 import { StudyBlockService } from "@/services/study-block/study-block.service";
+import { SavedItemRepository } from "@/repositories/saved-item.repository";
 import { sendQuickReplyWithMenu } from "@/bot/constants";
 import { Logger } from "@/lib/utils/logger";
 import connectDB from "@/lib/db/mongoose";
@@ -9,6 +10,7 @@ import User from "@/models/User";
 import Deadline, { IDeadline } from "@/models/Deadline";
 
 const userStateService = new UserStateService();
+const savedItemRepo = new SavedItemRepository();
 
 export async function handleDefaultChat(
   context: BotContext,
@@ -127,10 +129,20 @@ export async function handleDefaultChat(
       }
     }
 
-    const response = await chatService.generateResponse(text, history, userData);
+    const response = await chatService.generateResponse(text, history, userData, userId);
     await userStateService.addToConversationHistory(userId, "assistant", response);
 
     Logger.info("發送 LLM 回應", { userId, textLength: text.length });
+
+    // 非阻塞：儲存對話到 Mem0 記憶 + SavedItem
+    const now = new Date();
+    Promise.allSettled([
+      chatService.storeMemory(userId, text, response),
+      savedItemRepo.save(userId, [
+        { role: "user", content: text, timestamp: now },
+        { role: "assistant", content: response, timestamp: now },
+      ]),
+    ]).catch((err) => Logger.error("背景儲存失敗", { error: err }));
 
     let finalResponse = response;
     if (rescheduleMessage) {
