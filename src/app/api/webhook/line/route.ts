@@ -72,6 +72,11 @@ export async function POST(request: NextRequest) {
         
         if (event.type === "message" && event.message?.type === "text") {
           Logger.info("Routing to handleText");
+          const src = (event as { source?: { type?: string; userId?: string } })
+            .source;
+          if (src?.type === "user" && src.userId) {
+            await lineClient.startLoadingAnimation(src.userId);
+          }
           await handleText(context);
         } else if (event.type === "follow") {
           Logger.info("Routing to handleFollow");

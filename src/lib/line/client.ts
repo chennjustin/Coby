@@ -1,6 +1,13 @@
 import { Logger } from "@/lib/utils/logger";
 
 const LINE_MESSAGING_API_URL = "https://api.line.me/v2/bot/message/reply";
+const LINE_LOADING_START_URL = "https://api.line.me/v2/bot/chat/loading/start";
+
+/** LINE 只接受 5–60 且為 5 的倍數 */
+function snapLineLoadingSeconds(seconds: number): number {
+  const clamped = Math.min(60, Math.max(5, seconds));
+  return Math.round(clamped / 5) * 5;
+}
 
 export class LineMessagingClient {
   private accessToken: string;
@@ -51,6 +58,52 @@ export class LineMessagingClient {
         text,
       },
     ]);
+  }
+
+  /**
+   * 在與使用者的 1 對 1 聊天中顯示「載入中／準備中」動畫（官方 Loading API）。
+   * 僅在 user 正在該聊天畫面時會顯示；群組/多人聊天不支援。
+   * 動畫會在指定秒數後消失，或在你發出下一則官方帳號訊息時消失。
+   * @see https://developers.line.biz/en/docs/messaging-api/use-loading-indicator/
+   */
+  async startLoadingAnimation(
+    userId: string,
+    loadingSeconds?: number
+  ): Promise<void> {
+    const raw =
+      loadingSeconds ??
+      parseInt(process.env.LINE_LOADING_SECONDS || "35", 10);
+    const seconds = snapLineLoadingSeconds(raw);
+
+    try {
+      const response = await fetch(LINE_LOADING_START_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.accessToken}`,
+        },
+        body: JSON.stringify({
+          chatId: userId,
+          loadingSeconds: seconds,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        Logger.warn("LINE loading animation start failed (non-fatal)", {
+          status: response.status,
+          error: errorText,
+        });
+        return;
+      }
+
+      Logger.debug("LINE loading animation started", { userId, seconds });
+    } catch (error) {
+      Logger.warn("LINE loading animation start failed (non-fatal)", {
+        error,
+        userId,
+      });
+    }
   }
 
   /**

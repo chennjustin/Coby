@@ -177,6 +177,7 @@ src/
 ### LINE Webhook
 
 - `POST /api/webhook/line` - LINE Webhook 接收端點
+- 收到使用者**文字訊息**時，會先呼叫 [Loading indicator](https://developers.line.biz/en/docs/messaging-api/use-loading-indicator/)，在聊天室顯示載入動畫（僅 1 對 1 聊天；使用者需停留在該聊天畫面）。可選環境變數 `LINE_LOADING_SECONDS`（5–60，預設 35）。
 
 ### Deadline API
 
