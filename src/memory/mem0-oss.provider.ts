@@ -1,4 +1,5 @@
 import { Logger } from "@/lib/utils/logger";
+import { TtlCache, makeCacheKey } from "@/lib/utils/ttl-cache";
 import {
   MemoryProvider,
   MemoryMessage,
@@ -9,6 +10,8 @@ import {
 } from "./types";
 
 let MemoryClass: any = null;
+
+const SEARCH_CACHE_TTL_MS = 60_000; // 同一 user+query 60 秒內不重打 Qdrant
 
 async function getMemoryClass() {
   if (!MemoryClass) {
@@ -21,6 +24,7 @@ async function getMemoryClass() {
 export class Mem0OssProvider implements MemoryProvider {
   private memory: any = null;
   private initPromise: Promise<void> | null = null;
+  private searchCache = new TtlCache<MemorySearchResult[]>(SEARCH_CACHE_TTL_MS, 200);
 
   constructor(private config: Record<string, any>) {
     this.initPromise = this.initialize();
@@ -57,6 +61,7 @@ export class Mem0OssProvider implements MemoryProvider {
         userId: options.userId,
         metadata: options.metadata,
       });
+      this.invalidateUserCache(options.userId);
       Logger.debug("Mem0: memories added", { userId: options.userId });
     } catch (error) {
       Logger.error("Mem0: failed to add memories", { error, userId: options.userId });
@@ -68,6 +73,13 @@ export class Mem0OssProvider implements MemoryProvider {
     options: MemorySearchOptions
   ): Promise<MemorySearchResult[]> {
     if (!(await this.ensureReady())) return [];
+
+    const cacheKey = makeCacheKey(options.userId, query.slice(0, 200));
+    const cached = this.searchCache.get(cacheKey);
+    if (cached) {
+      Logger.debug("Mem0: search cache hit", { userId: options.userId });
+      return cached;
+    }
 
     try {
       const result = await this.memory.search(query, {
@@ -84,6 +96,8 @@ export class Mem0OssProvider implements MemoryProvider {
           userId: r.userId ?? r.user_id,
         })
       );
+
+      this.searchCache.set(cacheKey, results);
 
       Logger.debug("Mem0: search completed", {
         userId: options.userId,
@@ -134,9 +148,14 @@ export class Mem0OssProvider implements MemoryProvider {
 
     try {
       await this.memory.deleteAll({ userId: options.userId });
+      this.invalidateUserCache(options.userId);
       Logger.debug("Mem0: all memories deleted", { userId: options.userId });
     } catch (error) {
       Logger.error("Mem0: deleteAll failed", { error, userId: options.userId });
     }
+  }
+
+  private invalidateUserCache(userId: string): void {
+    this.searchCache.clear();
   }
 }
