@@ -1,7 +1,11 @@
 import { OpenAIClient } from "@/lib/llm/openai";
 import { Logger } from "@/lib/utils/logger";
+import { TtlCache } from "@/lib/utils/ttl-cache";
 import { getTodayChinese, getCurrentDateTimeChinese } from "@/lib/utils/date";
 import { APP_CONFIG } from "@/lib/config/app.config";
+
+const INTENT_CACHE_TTL_MS = 30_000;
+const DATE_CACHE_TTL_MS = 30_000;
 
 export type Intent = "check_in" | "daily_quote" | "view_schedule" | "add_deadline" | "update_deadline" | "delete_deadline" | "modify_schedule" | "other";
 
@@ -20,6 +24,8 @@ export interface IntentResult {
 
 export class IntentService {
   private llmClient: OpenAIClient;
+  private intentCache = new TtlCache<IntentResult>(INTENT_CACHE_TTL_MS, 200);
+  private dateCache = new TtlCache<string | null>(DATE_CACHE_TTL_MS, 200);
 
   constructor() {
     this.llmClient = new OpenAIClient();
@@ -29,6 +35,13 @@ export class IntentService {
    * 識別用戶意圖並提取實體
    */
   async detectIntentAndExtract(text: string): Promise<IntentResult> {
+    const cacheKey = text.trim().slice(0, 200);
+    const cached = this.intentCache.get(cacheKey);
+    if (cached) {
+      Logger.debug("IntentService: cache hit", { text: cacheKey });
+      return cached;
+    }
+
     try {
       const prompt = `你是一個 Coby LINE Bot 的意圖識別系統，專門處理台灣大學生的對話。
 
@@ -189,15 +202,11 @@ ${this.sanitizeForPrompt(text)}
 
       Logger.info("意圖識別結果", { text, intent, entities, confidence, actionType });
 
-      return {
-        intent,
-        entities,
-        confidence,
-        actionType,
-      };
+      const result: IntentResult = { intent, entities, confidence, actionType };
+      this.intentCache.set(cacheKey, result);
+      return result;
     } catch (error) {
       Logger.error("意圖識別失敗", { error, text });
-      // 返回預設結果
       return {
         intent: "other",
         entities: {},
@@ -221,6 +230,13 @@ ${this.sanitizeForPrompt(text)}
    * 從文字中提取日期（改進版本）
    */
   async extractDateFromText(text: string): Promise<string | null> {
+    const dateCacheKey = `date::${text.trim().slice(0, 200)}`;
+    const cachedDate = this.dateCache.get(dateCacheKey);
+    if (cachedDate !== undefined) {
+      Logger.debug("IntentService: date cache hit", { text });
+      return cachedDate;
+    }
+
     try {
       const prompt = `請將以下中文日期描述轉換為 YYYY-MM-DD 格式的日期。
 
@@ -258,9 +274,11 @@ ${this.sanitizeForPrompt(text)}
       const parsed = this.safeParseJson(cleaned);
 
       if (parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date)) {
+        this.dateCache.set(dateCacheKey, parsed.date);
         return parsed.date;
       }
 
+      this.dateCache.set(dateCacheKey, null);
       return null;
     } catch (error) {
       Logger.error("日期提取失敗", { error, text });
