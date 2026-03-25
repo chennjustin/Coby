@@ -84,16 +84,37 @@
 
 - **框架**: Next.js 14+ (App Router) + TypeScript
 - **資料庫**: MongoDB Atlas + Mongoose
-- **LINE API**: Line Messaging API
-- **LLM**: OpenAI (GPT-3.5/GPT-4)
+- **向量儲存**: Qdrant Cloud（Mem0 記憶用）
+- **LINE API**: Line Messaging API + Loading Indicator
+- **LLM**: OpenAI (GPT-4o-mini / GPT-4)
+- **長期記憶**: Mem0 OSS（RAG 增強回應）
 - **樣式**: Tailwind CSS
 - **日期處理**: Day.js
 - **拖曳功能**: react-beautiful-dnd
 - **驗證**: Zod
 
+### 記憶系統 (Mem0)
+
+- 每次聊天結束後，對話會自動儲存到 Mem0（向量化記憶）和 MongoDB（SavedItem 原始記錄）
+- 下次對話時透過語意搜尋檢索相關記憶，注入 system prompt 實現個人化回應
+- 簽到時會結合記憶生成個人化回饋（FeedbackService）
+- 當使用者問學習建議時，會結合記憶生成個人化推薦（RecommendationService）
+
+### 快取機制
+
+專案使用 in-memory TTL Cache（`src/lib/utils/ttl-cache.ts`）降低重複的外部 API 呼叫：
+
+| 快取目標 | TTL | 說明 |
+|----------|-----|------|
+| Mem0 搜尋結果 | 60 秒 | 同一 user + query 不重打 Qdrant |
+| Intent 意圖識別 | 30 秒 | 同一句話不重跑 LLM 意圖分類 |
+| 日期解析 | 30 秒 | 同一句話不重跑 LLM 日期提取 |
+
+在 Vercel Serverless 環境下，每次 cold start 快取會自動清空，不需額外管理。新增記憶或刪除記憶時會自動清除對應的搜尋快取。
+
 ## 環境變數設定
 
-建立 `.env.local` 檔案，填入以下變數：
+建立 `.env.local` 檔案，填入以下變數（完整範例見 `.env.example`）：
 
 ```env
 # Line Messaging API
@@ -102,10 +123,15 @@ LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
 
 # LLM (OpenAI)
 OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_MODEL=gpt-4o-mini
 
 # MongoDB
 MONGODB_URI=mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/line-bot?retryWrites=true&w=majority
+
+# Mem0 Memory (Qdrant Cloud)
+MEMORY_PROVIDER=mem0_oss
+QDRANT_URL=https://your-cluster.region.cloud.qdrant.io
+QDRANT_API_KEY=your_qdrant_api_key
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
