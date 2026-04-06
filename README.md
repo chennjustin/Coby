@@ -99,13 +99,31 @@ sequenceDiagram
 
 `src/lib/utils/ttl-cache.ts` 提供 in-memory TTL：Mem0 搜尋、意圖分類、日期解析，以降低重複呼叫 LLM 與向量服務。
 
-## 組態與執行方式
+## 組態
 
-環境變數範例見 `.env.example`。生產或公開 Webhook 時，LINE 應指向 `https://<你的網域>/api/webhook/line`。
+環境變數範例見 `.env.example`。部署官方帳號時，LINE Webhook 應設為 `https://<你的網域>/api/webhook/line`。
 
-**開發（本機 Node）：** `npm install` 後使用 `.env.local`，執行 `npm run dev`。向量庫可使用託管 Qdrant（`QDRANT_URL` 等）或僅以 Compose 啟動 Qdrant：`docker compose up -d qdrant`，並將 `memory.config` 所支援的變數指向本機 `localhost:6333`。
+## 執行方法
 
-**容器（Compose）：** `docker compose up --build` 建置並啟動 Next.js production 與 Qdrant；Compose 將 Mem0 指向服務網路內的 Qdrant，並以 volume 持久化 `mem0_history.db`。此路徑使用專案根目錄 `.env`（勿提交版本庫）。應用埠 **3000**，Qdrant **6333**。
+- **本機 Node**：日常開發、hot reload、除錯。
+- **Docker Compose**：和 production build 一致；一併啟動 Qdrant 與應用。
+
+### 本機
+
+- 安裝依賴：`npm install`
+- 設定`.env`
+- 啟動開發伺服器：`npm run dev`（預設 `http://localhost:3000`）
+- Mem0 / Qdran：
+  - 託管 Qdrant：於 `.env.local` 設定 `QDRANT_URL`（和 `QDRANT_API_KEY`）
+  - 本機僅起向量庫：`docker compose up -d qdrant`，並將 `memory.config` 所讀變數指向 `localhost:6333`
+
+### Docker（Compose）
+
+- 於專案根目錄建立 `.env`
+- 建置並啟動：`docker compose up --build`
+- 應用：`http://localhost:3000`
+- Qdrant：`http://localhost:6333`
+- Compose 內 Mem0 使用服務網路中的 Qdrant；`mem0_history.db` 以 volume 持久化
 
 ## 相關文件
 
