@@ -1,4 +1,29 @@
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Use dockerized Qdrant for Mem0 vector store (alternatively set QDRANT_URL for cloud)
+      # Force local Qdrant even if your .env has QDRANT_URL set
+      QDRANT_URL: ""
+      QDRANT_API_KEY: ""
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      # Persist Mem0 local history DB inside a named volume (non-Vercel env)
+      MEM0_HISTORY_DB_PATH: /data/mem0_history.db
+      NODE_ENV: production
+    env_file:
+      # Create this file locally (do NOT commit) or use .env.example as reference
+      - .env
+    depends_on:
+      - qdrant
+    volumes:
+      - mem0_history:/data
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -10,3 +35,4 @@ services:
 
 volumes:
   qdrant_storage:
+  mem0_history:

@@ -1,26 +1,23 @@
 # Coby
 
-整合 LINE Messaging API 的智慧時間管理助手：用自然語言新增/修改 Deadlines，自動生成可視化學習時程表，並透過 **Mem0 長期記憶**與 **意圖分類（Intent Classification）**提供個人化對話與建議。
+LINE 上的智慧時間管理助理：以自然語言維護 Deadlines 與學習區塊，並提供可視化時程頁面。對話層結合 **意圖分類** 與 **Mem0（Qdrant 向量儲存）** 的長期記憶，用於個人化回覆與建議。
 
-> **LINE ID ：@445kyihz**
+**LINE Official Account：** `@445kyihz`
 
-## 主要功能
+## 目前做到的事情
 
-- **自然語言操作**：新增/修改/刪除 Deadline、修改排程偏好（例如排除日期/偏好時段）。
-- **自動排程**：依截止日回推安排讀書區塊，並提供拖曳調整的時程表頁面。
-- **每日互動**：簽到、占卜、今日待辦/提醒摘要。
-- **個人化回應**：透過 Mem0 記住使用者偏好與歷史互動，讓建議更貼近個人習慣。
+- 自然語言新增、修改、刪除 Deadline，以及調整排程偏好（時段、排除日期等）。
+- 依截止日自動產生學習區塊；Web 端 `/schedule` 支援拖曳編排。
+- 簽到、每日內容、待辦摘要等互動流程。
+- Mem0 語意檢索與寫入，搭配 MongoDB 持久化使用者資料與對話紀錄。
 
 ## 技術棧
 
-- **Runtime / Web**：Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- **LLM**：OpenAI SDK（模型可由環境變數切換）
-- **DB**：MongoDB Atlas + Mongoose
-- **Long-term Memory**：Mem0 OSS + Qdrant（向量檢索）
-- **Validation**：Zod
-- **Scheduling UI**：react-beautiful-dnd
+Next.js 14（App Router）、TypeScript、Tailwind CSS；OpenAI SDK；MongoDB（Mongoose）；Mem0 OSS 與 Qdrant；Zod；時程 UI 使用 react-beautiful-dnd。
 
-## 系統架構
+## 架構
+
+單一 Next.js 應用承載 LINE Webhook、REST API 與前端頁面。請求由 `src/bot/handlers` 進入、`controllers` 編排、`services` 執行業務邏輯；結構化資料寫入 MongoDB，長期記憶經 Mem0 讀寫 Qdrant。
 
 ```mermaid
 flowchart TD
@@ -44,20 +41,7 @@ flowchart TD
 
 
 
-```
-LINE Webhook (/api/webhook/line)
-  → event handlers (src/bot/handlers/*)
-  → controllers (src/bot/controllers/*)
-  → services (src/services/*)
-      ├─ MongoDB (deadlines, study blocks, user state, saved items)
-      └─ Mem0 + Qdrant (semantic memory: store + search)
-  → LINE reply / push message
-
-Web UI (/schedule/*)
-  → Next.js pages + API routes (/api/deadlines, /api/study-blocks, /api/schedule)
-```
-
-## 訊息處理流程（Intent + Memory + Scheduling）
+## 訊息處理流程
 
 ```mermaid
 sequenceDiagram
@@ -99,78 +83,32 @@ sequenceDiagram
 
 
 
-## Mem0 記憶流程
+## Mem0 與資料
 
-- **寫入**：對話結束後，將可復用的使用者資訊抽取/整理後寫入 Mem0；同時在 MongoDB 保留原始紀錄（SavedItem）。
-- **檢索**：收到新訊息時，先用語意檢索找出相關記憶，注入系統提示詞（system prompt），提升連貫性與個人化。
-- **應用場景**：簽到回饋（`FeedbackService`）、學習建議（`RecommendationService`）、排程偏好理解（LLM services）。
+寫入：回合結束後將可沿用的事實寫入 Mem0，並在 MongoDB 保留原始紀錄。檢索：新訊息先語意搜尋相關記憶再注入 system prompt。應用包含簽到回饋（`FeedbackService`）、建議（`RecommendationService`）及排程相關 LLM 流程。
 
-## 服務分工
+## 服務層（`src/services`）
 
-> 位置：`src/services/`*（Bot controller 會組裝回應並呼叫這些 service）
+- **LLM / Intent：** `IntentService`、`ChatService`、`PreferenceExtractorService`、`SchedulerLLMService`、`ScheduleModifierService`
+- **Scheduling：** `SmartSchedulerService`、`ScheduleValidatorService`（含 LLM 結果驗證與規則備援）
+- **Deadline / StudyBlock：** `DeadlineService`、`DeadlineRescheduleService`、`DeadlineMatcherService`、`StudyBlockService`
+- **User / Session：** `UserStateService`、`UserTokenService`、`UserDeletionService`
+- **Engagement：** `CheckinService`、`QuoteService`、`FeedbackService`、`RecommendationService`
 
-- **LLM / Intent**
-  - `IntentService`：意圖分類（如 check-in / view-schedule / add-deadline / modify-schedule）。
-  - `ChatService`：一般對話回覆（含記憶注入與回覆生成）。
-  - `PreferenceExtractorService`：從自然語句萃取偏好（時段、排除規則等）。
-  - `SchedulerLLMService` / `ScheduleModifierService`：用 LLM 產生/修改排程草案。
-- **Scheduling**
-  - `SmartSchedulerService`：排程核心，整合限制與偏好。
-  - `ScheduleValidatorService`：驗證 LLM 排程結果；失敗時走備援策略（rule-based/fallback）。
-- **Deadline / Study Blocks**
-  - `DeadlineService`：CRUD + 觸發重新排程。
-  - `DeadlineRescheduleService` / `DeadlineMatcherService`：期限變更或語意指涉的處理。
-  - `StudyBlockService`：讀書區塊 CRUD、關聯 deadline、狀態更新。
-- **User / Session**
-  - `UserStateService`：多步驟流程狀態（引導式新增 deadline、取消/回主選單等）。
-  - `UserTokenService`：產生/驗證 schedule 頁面存取 token。
-  - `UserDeletionService`：解除關注或清除資料時的刪除流程。
-- **Engagement**
-  - `CheckinService`：簽到、連續天數、今日摘要。
-  - `QuoteService`：占卜/每日內容生成。
-  - `FeedbackService`：結合記憶生成個人化回饋。
-  - `RecommendationService`：結合記憶給讀書/排程建議。
+## 快取
 
-## 快取使用 in-memory TTL cache：`src/lib/utils/ttl-cache.ts`
+`src/lib/utils/ttl-cache.ts` 提供 in-memory TTL：Mem0 搜尋、意圖分類、日期解析，以降低重複呼叫 LLM 與向量服務。
 
-- **Mem0 搜尋結果快取**：避免同一使用者同一 query 重複打 Qdrant
-- **Intent 分類快取**：避免同一句話重跑意圖分類
-- **日期解析快取**：避免同一句話重跑時間解析
+## 組態與執行方式
 
-## 本地啟動
+環境變數範例見 `.env.example`。生產或公開 Webhook 時，LINE 應指向 `https://<你的網域>/api/webhook/line`。
 
-### 1) 安裝
+**開發（本機 Node）：** `npm install` 後使用 `.env.local`，執行 `npm run dev`。向量庫可使用託管 Qdrant（`QDRANT_URL` 等）或僅以 Compose 啟動 Qdrant：`docker compose up -d qdrant`，並將 `memory.config` 所支援的變數指向本機 `localhost:6333`。
 
-```bash
-npm install
-```
+**容器（Compose）：** `docker compose up --build` 建置並啟動 Next.js production 與 Qdrant；Compose 將 Mem0 指向服務網路內的 Qdrant，並以 volume 持久化 `mem0_history.db`。此路徑使用專案根目錄 `.env`（勿提交版本庫）。應用埠 **3000**，Qdrant **6333**。
 
-### 2) 環境變數
+## 相關文件
 
-建立 `.env.local`（範例見 `.env.example`），至少需：
-
-- `LINE_CHANNEL_SECRET`
-- `LINE_CHANNEL_ACCESS_TOKEN`
-- `OPENAI_API_KEY`（與選用的 `OPENAI_MODEL`）
-- `MONGODB_URI`
-- `MEMORY_PROVIDER`（例如 `mem0_oss`）
-- `QDRANT_URL` / `QDRANT_API_KEY`（或用下方 compose 起本機 Qdrant）
-- `NEXT_PUBLIC_APP_URL`
-
-### 3) （可選）啟動本機 Qdrant
-
-```bash
-docker compose up -d
-```
-
-### 4) 啟動開發伺服器
-
-```bash
-npm run dev
-```
-
-## 文件
-
-- `docs/DEVELOPMENT.md`：開發者導覽（handlers/controllers/services 分層）
-- `docs/data-schema.md`：資料 schema 與時間策略（UTC 儲存、台灣時區顯示）
+- `docs/DEVELOPMENT.md`：目錄與事件流
+- `docs/data-schema.md`：資料模型與時間策略（UTC 儲存、Asia/Taipei 顯示）
 
